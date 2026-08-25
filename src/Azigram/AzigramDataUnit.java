@@ -13,11 +13,12 @@ import fftManager.NonMagnitudeSpectrogramData;
  * @author brian_mil
  *
  */
-public class AzigramDataUnit extends FFTDataUnit {
+public class AzigramDataUnit extends FFTDataUnit implements NonMagnitudeSpectrogramData {
 
 	ComplexArray P;
 	double[] vx, vy, f, directionalData;
 	private double[] directionalMagnitude;
+	private double[] excessAboveBackground;
 	
 	public AzigramDataUnit(long timeMilliseconds, int channelBitmap, long startSample, long duration,
 			ComplexArray fftData, int fftSlice) {
@@ -78,13 +79,25 @@ public class AzigramDataUnit extends FFTDataUnit {
 	}
 	
 	/**
-	 * Placeholder in case we want an Azigram with transparency linked to 
-	 * signal amplitude.
-	 * @return
+	 * How far (in dB) each cell's magnitude sits above the tracked per-bin
+	 * noise-floor percentile (see AzigramProcess's AzigramPercentileBackground)
+	 * - a better basis for deciding "is this cell real signal or background
+	 * noise" than a fixed absolute dB threshold, since ambient noise varies by
+	 * frequency, deployment, and season. Falls back to raw magnitude if the
+	 * background tracker hasn't populated this for some reason.
+	 * @return per-bin dB above the tracked background, or raw magnitude as a
+	 * fallback.
 	 */
-			
 	public double[] getSpectrogramAlpha() {
-		return getDirectionalMagnitude();
+		return excessAboveBackground != null ? excessAboveBackground : getDirectionalMagnitude();
+	}
+
+	public void setExcessAboveBackground(double[] excessAboveBackground) {
+		this.excessAboveBackground = excessAboveBackground;
+	}
+
+	public double[] getExcessAboveBackground() {
+		return excessAboveBackground;
 	}
 
 	public void setDirectionalMagnitude(double[] mag) {

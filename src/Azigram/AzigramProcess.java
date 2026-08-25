@@ -51,6 +51,13 @@ public class AzigramProcess extends PamProcess implements ScaledFFTDataSource {
 	private int outputFftLength, outputFftHop;
 
 	private double decimateFactor;
+
+	/**
+	 * Per-bin background/noise-floor tracker used to decide how far each
+	 * cell's magnitude sits above background, for display fading - see
+	 * AzigramPercentileBackground.
+	 */
+	private AzigramPercentileBackground percentileBackground = new AzigramPercentileBackground();
 	
 	
 	public AzigramProcess(PamControlledUnit pamControlledUnit, FFTDataBlock parentDataBlock) {
@@ -151,6 +158,16 @@ public class AzigramProcess extends PamProcess implements ScaledFFTDataSource {
 			azigramData.setFftHop(outputFftHop);
 			azigramData.setFftLength(outputFftLength);
 			azigramData.setSampleRate(azigramControl.azigramParameters.outputSampleRate, true);
+
+			// Prepare the background tracker in terms of dB-per-second and
+			// seconds, translated here into dB-per-frame and frame counts
+			// since that's the only place the output frame rate is known.
+			double dT = outputFftHop / getSampleRate();
+			AzigramParameters azParams = azigramControl.azigramParameters;
+			percentileBackground.prepare(
+					azParams.backgroundPercentile,
+					azParams.backgroundStepDbPerSecond * dT,
+					(int) Math.max(1, Math.round(azParams.backgroundRunInSeconds / dT)));
 		
 		}
 	}
