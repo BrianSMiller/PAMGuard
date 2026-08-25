@@ -343,7 +343,14 @@ public class Scrolling2DPlotDataFX {
 		
 		if (lastPowerSpecBin<0) return;
 		if (lastPowerSpecBin >= intPowerSpectrum.length) return;
-		double[] magData = fftDataUnit.getMagnitudeData();
+		// getSpectrogramData() rather than getMagnitudeData(): for a plain
+		// FFTDataUnit these are identical (getSpectrogramData() just returns
+		// getMagnitudeData() - see FFTDataUnit), so this is behaviourally
+		// unchanged for every existing data type. It also lets a data unit like
+		// AzigramDataUnit, whose displayed value (bearing angle) legitimately
+		// differs from its true magnitude, be plotted correctly here - matching
+		// the same seam the older Swing spectrogram display already relies on.
+		double[] magData = fftDataUnit.getSpectrogramData();
 		if (magData == null) { // needed for the blank data unit. 
 			//System.out.println("Fill the bin with zeros! " + lastPowerSpecBin);
 

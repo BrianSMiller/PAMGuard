@@ -60,8 +60,21 @@ public class FFTPlotInfo extends Scrolling2DPlotInfo {
 	 */
 	@Override
 	public PlotParams2D createPlotParams() {
-		specParams = new SpectrogramParamsFX();
+		specParams = createSpectrogramParams();
 		return specParams;
+	}
+
+	/**
+	 * Factory for this plot's SpectrogramParamsFX (or a subclass of it). Split
+	 * out from createPlotParams() so that subclasses displaying something other
+	 * than a standard dB magnitude spectrum (e.g. AzigramPlotInfo, whose values
+	 * are a bearing angle in degrees) can supply their own SpectrogramParamsFX
+	 * subclass with different defaults, while the specParams field - used
+	 * throughout the rest of this class - is still populated correctly either
+	 * way.
+	 */
+	protected SpectrogramParamsFX createSpectrogramParams() {
+		return new SpectrogramParamsFX();
 	}
 
 	@Override

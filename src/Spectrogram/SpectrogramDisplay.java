@@ -123,6 +123,8 @@ import PamguardMVC.dataSelector.DataSelector;
 import dataPlotsFX.data.DataTypeInfo;
 import fftManager.FFTDataBlock;
 import fftManager.FFTDataUnit;
+import fftManager.NonMagnitudeSpectrogramData;
+import fftManager.ScaledFFTDataSource;
 import ltsa.LtsaDataBlock;
 import pamScrollSystem.AbstractPamScroller;
 import pamScrollSystem.AbstractPamScrollerAWT;
@@ -568,6 +570,7 @@ InternalFrameListener, DisplayPanelContainer, SpectrogramParametersUser, PamSett
 			if (sourceFFTDataBlock != null) {
 				sourceFFTDataBlock.addObserver(this);
 				sampleRate = sourceFFTDataBlock.getSampleRate();
+				adoptRecommendedScale(sourceFFTDataBlock);
 			}
 		}
 
@@ -619,6 +622,36 @@ InternalFrameListener, DisplayPanelContainer, SpectrogramParametersUser, PamSett
 		}
 
 		repaintAll();
+	}
+	
+	/**
+	 * If the given FFT data source's owning process advertises a recommended
+	 * display scale (see ScaledFFTDataSource - e.g. the Azigram module's output
+	 * is bearing angle in degrees, not dB), adopt it as this display's amplitude
+	 * scale, and switch to a circular colour map (HSV) if the source says its
+	 * values wrap around. Without this, a source like Azigram silently inherits
+	 * the dB-oriented default {@link SpectrogramParameters#amplitudeLimits},
+	 * which clamps almost the entire 0-360 degree range to a single flat
+	 * colour - indistinguishable from no data at all. Only runs once, when the
+	 * source is actually (re)selected, so it never fights a user's own later
+	 * adjustments on the Scales tab.
+	 * @param fftDataSource the newly (re)selected FFT data source, or null.
+	 */
+	private void adoptRecommendedScale(FFTDataBlock fftDataSource) {
+		if (fftDataSource == null) {
+			return;
+		}
+		PamProcess parentProcess = fftDataSource.getParentProcess();
+		if (parentProcess instanceof ScaledFFTDataSource) {
+			ScaledFFTDataSource scaledSource = (ScaledFFTDataSource) parentProcess;
+			spectrogramParameters.amplitudeLimits = new double[] {
+					scaledSource.getRecommendedScaleMin(),
+					scaledSource.getRecommendedScaleMax()
+			};
+			if (scaledSource.isCircularScale()) {
+				spectrogramParameters.setColourMap(ColourArrayType.HSV);
+			}
+		}
 	}
 	
 	public String getFullTitle() {
@@ -2423,8 +2456,7 @@ InternalFrameListener, DisplayPanelContainer, SpectrogramParametersUser, PamSett
 				for (int i = minBin; i <= maxBin; i++) {
 					colval = colorValues[getColourIndex(cellValues[i])].clone();
 
-					//Hack to check for Azigram
-					if ( dBlevel[i] != cellValues[i]) {	  
+					if (dataUnit instanceof NonMagnitudeSpectrogramData) {
 						colval = fadePixel(colval,dBlevel[i]);
 					}
 
@@ -2600,8 +2632,7 @@ InternalFrameListener, DisplayPanelContainer, SpectrogramParametersUser, PamSett
 				//				}
 				if (imagePos >= 0) {
 					fillSpectrogramFLoatLine(imagePos, scalingImageLine);
-					//Hack to determine if displaying Azigram
-					if (cellValue == fftUnit.getSpectrogramData() )
+					if (fftUnit instanceof NonMagnitudeSpectrogramData)
 						drawSpectrogramLine(writableRaster, imagePos, specFloatData[imagePos], fftUnit.getMagnitudeData());
 					else 
 						drawSpectrogramLine(writableRaster, imagePos, specFloatData[imagePos], null);

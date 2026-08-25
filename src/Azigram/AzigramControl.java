@@ -14,6 +14,8 @@ import PamController.PamSettingManager;
 import PamController.PamSettings;
 import fftManager.FFTDataBlock;
 import fftManager.FFTPluginPanelProvider;
+import AzigramFX.AzigramPlotProvider;
+import dataPlotsFX.data.TDDataProviderRegisterFX;
 
 /**
  * Module that implements the Azigram algorithm from Thode et al 2019 J. Acoust.
@@ -48,6 +50,9 @@ public class AzigramControl extends PamControlledUnit implements PamSettings {
 		azigramProcess.setParentDataBlock(defaultInputDataBlock);
 		
 		fFTPluginPanelProvider = new FFTPluginPanelProvider(azigramProcess.getOutputDataBlock());
+		
+		TDDataProviderRegisterFX.getInstance().registerDataInfo(
+				new AzigramPlotProvider(this, azigramProcess.getOutputDataBlock()));
 		
 	}
 

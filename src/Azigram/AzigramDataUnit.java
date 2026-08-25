@@ -4,6 +4,7 @@ import java.util.Arrays;
 
 import PamUtils.complex.ComplexArray;
 import fftManager.FFTDataUnit;
+import fftManager.NonMagnitudeSpectrogramData;
 
 /**
  * Just a dirty hack for testing. This AzigramDataUnit is just an FFTDataUnit, 

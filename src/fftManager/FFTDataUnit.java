@@ -250,6 +250,7 @@ public class FFTDataUnit extends DataUnit2D<PamDataUnit,SuperDetection> implemen
 		this.usefulBinRange = usefulBinRange;
 	}
 
+	@Override
 	public double[] getSpectrogramData() {
 		return getMagnitudeData();
 	}

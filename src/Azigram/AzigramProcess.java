@@ -17,6 +17,7 @@ import PamguardMVC.dataOffline.OfflineDataLoadInfo;
 import fftManager.Complex;
 import fftManager.FFTDataBlock;
 import fftManager.FFTDataUnit;
+import fftManager.ScaledFFTDataSource;
 import spectrogramNoiseReduction.SpecNoiseMethod;;
 
 /**
@@ -28,7 +29,7 @@ import spectrogramNoiseReduction.SpecNoiseMethod;;
  * @author brian_mil
  *
  */
-public class AzigramProcess extends PamProcess {
+public class AzigramProcess extends PamProcess implements ScaledFFTDataSource {
 	
 	/**
 	 * FFT data source for the noise reduction and threshold process. 
@@ -331,6 +332,47 @@ public class AzigramProcess extends PamProcess {
 		
 		du.setDirectionalAngle(mu);
 		du.setDirectionalMagnitude(mag);
+
+		// How far each cell sits above the tracked per-bin noise floor - a
+		// more robust basis for display fading than a fixed absolute dB
+		// threshold, since ambient noise varies by frequency, deployment,
+		// and season. displayGaindB is applied here as a simple manual
+		// offset on top, for a quick brightness nudge without re-tuning the
+		// background tracker itself.
+		double[] background = percentileBackground.process(mag);
+		double[] excess = new double[len];
+		double gainDb = azigramControl.azigramParameters.displayGaindB;
+		for (int i = 0; i < len; i++) {
+			excess[i] = mag[i] - background[i] + gainDb;
+		}
+		du.setExcessAboveBackground(excess);
+	}
+
+	/**
+	 * The Azigram's getSpectrogramData() is bearing angle in degrees (see
+	 * runAzigram() above, which constrains it to [0, 360)), not a dB magnitude.
+	 * A display picking this process's output up as a data source should use
+	 * this range for its colour scale rather than a dB-oriented default.
+	 */
+	@Override
+	public double getRecommendedScaleMin() {
+		return 0;
+	}
+
+	@Override
+	public double getRecommendedScaleMax() {
+		return 360;
+	}
+
+	/**
+	 * Bearing angle wraps around (359 degrees is adjacent to 0 degrees), so a
+	 * circular colour map (e.g. HSV) suits it better than a linear one - see
+	 * the module's own help docs, which already recommend this for the manual
+	 * case.
+	 */
+	@Override
+	public boolean isCircularScale() {
+		return true;
 	}
 
 	
