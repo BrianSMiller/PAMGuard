@@ -17,6 +17,7 @@ import PamguardMVC.dataOffline.OfflineDataLoadInfo;
 import fftManager.Complex;
 import fftManager.FFTDataBlock;
 import fftManager.FFTDataUnit;
+import fftManager.ScaledFFTDataSource;
 import spectrogramNoiseReduction.SpecNoiseMethod;;
 
 /**
@@ -28,7 +29,7 @@ import spectrogramNoiseReduction.SpecNoiseMethod;;
  * @author brian_mil
  *
  */
-public class AzigramProcess extends PamProcess {
+public class AzigramProcess extends PamProcess implements ScaledFFTDataSource {
 	
 	/**
 	 * FFT data source for the noise reduction and threshold process. 
@@ -50,6 +51,13 @@ public class AzigramProcess extends PamProcess {
 	private int outputFftLength, outputFftHop;
 
 	private double decimateFactor;
+
+	/**
+	 * Per-bin background/noise-floor tracker used to decide how far each
+	 * cell's magnitude sits above background, for display fading - see
+	 * AzigramPercentileBackground.
+	 */
+	private AzigramPercentileBackground percentileBackground = new AzigramPercentileBackground();
 	
 	
 	public AzigramProcess(PamControlledUnit pamControlledUnit, FFTDataBlock parentDataBlock) {
@@ -150,6 +158,16 @@ public class AzigramProcess extends PamProcess {
 			azigramData.setFftHop(outputFftHop);
 			azigramData.setFftLength(outputFftLength);
 			azigramData.setSampleRate(azigramControl.azigramParameters.outputSampleRate, true);
+
+			// Prepare the background tracker in terms of dB-per-second and
+			// seconds, translated here into dB-per-frame and frame counts
+			// since that's the only place the output frame rate is known.
+			double dT = outputFftHop / getSampleRate();
+			AzigramParameters azParams = azigramControl.azigramParameters;
+			percentileBackground.prepare(
+					azParams.backgroundPercentile,
+					azParams.backgroundStepDbPerSecond * dT,
+					(int) Math.max(1, Math.round(azParams.backgroundRunInSeconds / dT)));
 		
 		}
 	}
@@ -331,6 +349,80 @@ public class AzigramProcess extends PamProcess {
 		
 		du.setDirectionalAngle(mu);
 		du.setDirectionalMagnitude(mag);
+
+		AzigramParameters params = azigramControl.azigramParameters;
+		if (params.backgroundMode == AzigramParameters.BackgroundMode.PERCENTILE) {
+			// How far each cell sits above the tracked per-bin noise floor - a
+			// more robust basis for display fading than a fixed absolute dB
+			// threshold, since ambient noise varies by frequency, deployment,
+			// and season. displayGaindB is applied here as a simple manual
+			// offset on top, for a quick brightness nudge without re-tuning
+			// the background tracker itself.
+			double[] background = percentileBackground.process(mag);
+			double[] excess = new double[len];
+			double gainDb = params.displayGaindB;
+			for (int i = 0; i < len; i++) {
+				excess[i] = mag[i] - background[i] + gainDb;
+			}
+			du.setExcessAboveBackground(excess);
+		}
+		else {
+			// ABSOLUTE mode: don't bother running the tracker at all - leave
+			// excessAboveBackground unset, so AzigramDataUnit.getSpectrogramAlpha()
+			// falls back to raw magnitude, which is exactly what's wanted here
+			// (compared directly against absoluteFadeFloorDb/absoluteFadeThresholdDb,
+			// a plain dB re 1uPa scale the user sets themselves).
+			du.setExcessAboveBackground(null);
+		}
+	}
+
+	/**
+	 * The Azigram's getSpectrogramData() is bearing angle in degrees (see
+	 * runAzigram() above, which constrains it to [0, 360)), not a dB magnitude.
+	 * A display picking this process's output up as a data source should use
+	 * this range for its colour scale rather than a dB-oriented default.
+	 */
+	@Override
+	public double getRecommendedScaleMin() {
+		return 0;
+	}
+
+	@Override
+	public double getRecommendedScaleMax() {
+		return 360;
+	}
+
+	/**
+	 * Bearing angle wraps around (359 degrees is adjacent to 0 degrees), so a
+	 * circular colour map (e.g. HSV) suits it better than a linear one - see
+	 * the module's own help docs, which already recommend this for the manual
+	 * case.
+	 */
+	@Override
+	public boolean isCircularScale() {
+		return true;
+	}
+
+	/**
+	 * getAlphaData() (via AzigramDataUnit.getSpectrogramAlpha()) is dB above
+	 * the tracked per-bin background in PERCENTILE mode - a relative
+	 * measure, not the absolute dB SPL scale SpectrogramDisplay's fade
+	 * thresholds originally assumed. In ABSOLUTE mode, getAlphaData() falls
+	 * back to raw magnitude instead, so the absolute-mode fields (which ARE
+	 * a plain dB SPL scale) are the right recommendation there.
+	 */
+	@Override
+	public double getRecommendedFadeFloor() {
+		AzigramParameters params = azigramControl.azigramParameters;
+		return params.backgroundMode == AzigramParameters.BackgroundMode.PERCENTILE ?
+				params.fadeFloorDb : params.absoluteFadeFloorDb;
+	}
+
+	@Override
+	public double getRecommendedFadeThreshold() {
+		AzigramParameters params = azigramControl.azigramParameters;
+		return params.backgroundMode == AzigramParameters.BackgroundMode.PERCENTILE ?
+				params.fadeThresholdDb : params.absoluteFadeThresholdDb;
 	}
 
 	

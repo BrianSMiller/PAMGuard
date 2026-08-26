@@ -123,6 +123,8 @@ import PamguardMVC.dataSelector.DataSelector;
 import dataPlotsFX.data.DataTypeInfo;
 import fftManager.FFTDataBlock;
 import fftManager.FFTDataUnit;
+import fftManager.NonMagnitudeSpectrogramData;
+import fftManager.ScaledFFTDataSource;
 import ltsa.LtsaDataBlock;
 import pamScrollSystem.AbstractPamScroller;
 import pamScrollSystem.AbstractPamScrollerAWT;
@@ -568,8 +570,17 @@ InternalFrameListener, DisplayPanelContainer, SpectrogramParametersUser, PamSett
 			if (sourceFFTDataBlock != null) {
 				sourceFFTDataBlock.addObserver(this);
 				sampleRate = sourceFFTDataBlock.getSampleRate();
+				adoptRecommendedScale(sourceFFTDataBlock);
 			}
 		}
+		// Unlike the scale/colour-map adoption above, the fade floor/threshold
+		// need to track the source's CURRENT recommendation on every settings
+		// pass, not just once when the source is first selected - e.g. so a
+		// user tuning Azigram's background/fade parameters via its own
+		// dialog sees the effect immediately on an already-open display,
+		// rather than only after re-selecting the data source. Cheap and
+		// idempotent, so safe to just re-run every time.
+		refreshRecommendedFade(sourceFFTDataBlock);
 
 		subscribeRawDataBlock();
 
@@ -619,6 +630,68 @@ InternalFrameListener, DisplayPanelContainer, SpectrogramParametersUser, PamSett
 		}
 
 		repaintAll();
+	}
+	
+	/**
+	 * If the given FFT data source's owning process advertises a recommended
+	 * display scale (see ScaledFFTDataSource - e.g. the Azigram module's output
+	 * is bearing angle in degrees, not dB), adopt it as this display's amplitude
+	 * scale, and switch to a circular colour map (HSV) if the source says its
+	 * values wrap around. Without this, a source like Azigram silently inherits
+	 * the dB-oriented default {@link SpectrogramParameters#amplitudeLimits},
+	 * which clamps almost the entire 0-360 degree range to a single flat
+	 * colour - indistinguishable from no data at all. Only runs once, when the
+	 * source is actually (re)selected, so it never fights a user's own later
+	 * adjustments on the Scales tab.
+	 * <p>
+	 * Fade floor/threshold adoption is handled separately by
+	 * refreshRecommendedFade() below, since - unlike scale/colour-map, which a
+	 * user might deliberately override afterwards - fade tuning needs to track
+	 * the source's current recommendation live.
+	 * @param fftDataSource the newly (re)selected FFT data source, or null.
+	 */
+	private void adoptRecommendedScale(FFTDataBlock fftDataSource) {
+		if (fftDataSource == null) {
+			return;
+		}
+		PamProcess parentProcess = fftDataSource.getParentProcess();
+		if (parentProcess instanceof ScaledFFTDataSource) {
+			ScaledFFTDataSource scaledSource = (ScaledFFTDataSource) parentProcess;
+			spectrogramParameters.amplitudeLimits = new double[] {
+					scaledSource.getRecommendedScaleMin(),
+					scaledSource.getRecommendedScaleMax()
+			};
+			if (scaledSource.isCircularScale()) {
+				spectrogramParameters.setColourMap(ColourArrayType.HSV);
+			}
+		}
+	}
+
+	/**
+	 * Adopts the source's current recommended fade floor/threshold (see
+	 * ScaledFFTDataSource), every time this is called - not just once. Unlike
+	 * adoptRecommendedScale() above, this deliberately has no
+	 * "only on source change" guard: fadeFloor/fadeThreshold default to an
+	 * absolute dB SPL scale that's meaningless for a source like Azigram
+	 * (whose getAlphaData() uses a different, source-defined convention that
+	 * can itself change live - e.g. a user switching between a relative
+	 * "dB above background" mode and an absolute dB SPL mode via Azigram's
+	 * own settings dialog). Re-reading this on every settings pass means that
+	 * kind of live tuning actually reaches an already-open display, rather
+	 * than only taking effect after the data source is re-selected. Cheap and
+	 * idempotent, so safe to call unconditionally.
+	 * @param fftDataSource the current FFT data source, or null.
+	 */
+	private void refreshRecommendedFade(FFTDataBlock fftDataSource) {
+		if (fftDataSource == null) {
+			return;
+		}
+		PamProcess parentProcess = fftDataSource.getParentProcess();
+		if (parentProcess instanceof ScaledFFTDataSource) {
+			ScaledFFTDataSource scaledSource = (ScaledFFTDataSource) parentProcess;
+			fadeFloor = scaledSource.getRecommendedFadeFloor();
+			fadeThreshold = scaledSource.getRecommendedFadeThreshold();
+		}
 	}
 	
 	public String getFullTitle() {
@@ -2370,7 +2443,7 @@ InternalFrameListener, DisplayPanelContainer, SpectrogramParametersUser, PamSett
 			 * direction for Azigram units
 			 */ 
 			double[] cellValues = dataUnit.getSpectrogramData();
-			double[] dBlevel = dataUnit.getMagnitudeData();
+			double[] dBlevel = dataUnit.getAlphaData();
 			//System.out.println(cellValues[10]+" "+dBlevel[10]);
 
 
@@ -2423,8 +2496,7 @@ InternalFrameListener, DisplayPanelContainer, SpectrogramParametersUser, PamSett
 				for (int i = minBin; i <= maxBin; i++) {
 					colval = colorValues[getColourIndex(cellValues[i])].clone();
 
-					//Hack to check for Azigram
-					if ( dBlevel[i] != cellValues[i]) {	  
+					if (dataUnit instanceof NonMagnitudeSpectrogramData) {
 						colval = fadePixel(colval,dBlevel[i]);
 					}
 
@@ -2600,9 +2672,8 @@ InternalFrameListener, DisplayPanelContainer, SpectrogramParametersUser, PamSett
 				//				}
 				if (imagePos >= 0) {
 					fillSpectrogramFLoatLine(imagePos, scalingImageLine);
-					//Hack to determine if displaying Azigram
-					if (cellValue == fftUnit.getSpectrogramData() )
-						drawSpectrogramLine(writableRaster, imagePos, specFloatData[imagePos], fftUnit.getMagnitudeData());
+					if (fftUnit instanceof NonMagnitudeSpectrogramData)
+						drawSpectrogramLine(writableRaster, imagePos, specFloatData[imagePos], fftUnit.getAlphaData());
 					else 
 						drawSpectrogramLine(writableRaster, imagePos, specFloatData[imagePos], null);
 				}

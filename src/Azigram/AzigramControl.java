@@ -97,6 +97,7 @@ public class AzigramControl extends PamControlledUnit implements PamSettings {
 	@Override
 	public boolean restoreSettings(PamControlledUnitSettings pamControlledUnitSettings) {
 		azigramParameters = ((AzigramParameters) pamControlledUnitSettings.getSettings()).clone();
+		azigramParameters.checkBackgroundDefaults();
 		return (azigramParameters != null);
 	}
 	

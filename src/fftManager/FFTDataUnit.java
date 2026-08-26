@@ -254,4 +254,23 @@ public class FFTDataUnit extends DataUnit2D<PamDataUnit,SuperDetection> implemen
 		return getMagnitudeData();
 	}
 
+	/**
+	 * The value used to decide how much to fade a cell towards the
+	 * background/floor colour in the Spectrogram Display. Defaults to the
+	 * magnitude, which is correct for the great majority of FFTDataUnit
+	 * types - for those, this is simply the same value being displayed, so
+	 * no fading occurs beyond what the display's own amplitude scale
+	 * already does. A subclass whose displayed value (getSpectrogramData())
+	 * isn't itself a meaningful measure of signal strength - e.g. the
+	 * Azigram module's bearing angle, which says nothing about how
+	 * confident that bearing is - can override this to return a genuine
+	 * confidence/strength measure instead, so the display can fade
+	 * low-confidence cells even though their angle/colour value is just as
+	 * "valid" a number as any other.
+	 * @return the per-bin values to drive display fading for this data unit.
+	 */
+	public double[] getAlphaData() {
+		return getMagnitudeData();
+	}
+
 }
