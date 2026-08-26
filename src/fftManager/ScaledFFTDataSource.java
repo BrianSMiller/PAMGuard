@@ -45,4 +45,28 @@ public interface ScaledFFTDataSource {
 		return false;
 	}
 
+	/**
+	 * @return the recommended lower bound, in whatever units getAlphaData()
+	 * (see DataUnit2D) returns for this source, below which a cell should be
+	 * faded fully to the display's floor colour. Defaults to
+	 * SpectrogramDisplay's own original hardcoded value (70), which assumed
+	 * an absolute dB SPL scale - a source using a different convention for
+	 * its alpha value (e.g. a relative "dB above background" measure, as
+	 * Azigram uses) should override this with a value appropriate to that
+	 * convention instead.
+	 */
+	default double getRecommendedFadeFloor() {
+		return 70;
+	}
+
+	/**
+	 * @return the recommended upper bound, in the same units as
+	 * getRecommendedFadeFloor(), above which a cell should be shown at full
+	 * colour with no fading at all. Defaults to SpectrogramDisplay's own
+	 * original hardcoded value (90).
+	 */
+	default double getRecommendedFadeThreshold() {
+		return 90;
+	}
+
 }

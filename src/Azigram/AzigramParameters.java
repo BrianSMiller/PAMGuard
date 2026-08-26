@@ -69,6 +69,86 @@ public class AzigramParameters implements Serializable, ManagedParameters, Clone
 	 * from zero.
 	 */
 	public double backgroundRunInSeconds = 2;
+
+	/**
+	 * Below this many dB above the tracked background (see
+	 * backgroundPercentile etc.), a cell is faded fully to the display's
+	 * floor colour. Works in the same relative units as
+	 * AzigramDataUnit.getSpectrogramAlpha() - NOT an absolute dB SPL value
+	 * (unlike SpectrogramDisplay's own original hardcoded fade floor, which
+	 * assumed one). Tune this by trial and error against real data.
+	 */
+	public double fadeFloorDb = 0;
+
+	/**
+	 * At or above this many dB above the tracked background, a cell is
+	 * shown at full colour with no fading at all. Tune this (along with
+	 * fadeFloorDb) by trial and error against real data.
+	 */
+	public double fadeThresholdDb = 15;
+
+	/**
+	 * How a cell's fade/transparency is decided: PERCENTILE uses the
+	 * adaptive per-bin background tracker above (fadeFloorDb/fadeThresholdDb
+	 * are then relative, "dB above tracked background"); ABSOLUTE instead
+	 * uses a plain fixed dB re 1uPa threshold - useful when the user already
+	 * knows their local ambient noise level (e.g. summer Southern Ocean
+	 * conditions for Antarctic blue whales) and would rather set that
+	 * directly than rely on the tracker.
+	 */
+	public enum BackgroundMode { PERCENTILE, ABSOLUTE }
+
+	public BackgroundMode backgroundMode = BackgroundMode.PERCENTILE;
+
+	/**
+	 * Below this many dB re 1uPa, a cell is faded fully to the display's
+	 * floor colour - only used when backgroundMode is ABSOLUTE. Separate
+	 * from fadeFloorDb above since the two are different unit conventions
+	 * (absolute dB SPL here vs relative dB-above-background there); keeping
+	 * them as separate fields means switching modes doesn't silently reuse a
+	 * number tuned for the other convention.
+	 */
+	public double absoluteFadeFloorDb = 70;
+
+	/**
+	 * At or above this many dB re 1uPa, a cell is shown at full colour with
+	 * no fading at all - only used when backgroundMode is ABSOLUTE.
+	 */
+	public double absoluteFadeThresholdDb = 90;
+
+	/**
+	 * Fixes up the background/fade fields above if they're at their bare
+	 * post-deserialisation default rather than a genuine value - because
+	 * AzigramParameters is a plain Serializable class, Java's native
+	 * deserialisation (used when loading settings from an older saved psfx
+	 * that predates these fields) never runs the constructor, so the normal
+	 * field initialisers above never execute; the fields are simply left at
+	 * their bare Java default (0, or null for backgroundMode). Each check
+	 * below detects a state that can only happen this way - never something
+	 * this class's own dialog validation would allow to be saved
+	 * deliberately - so its presence after a load reliably means that
+	 * particular field (or group of fields) was never actually set. Called
+	 * from AzigramControl.restoreSettings() after loading, so this applies
+	 * regardless of whether it's a genuinely new module or an older saved
+	 * settings blob.
+	 */
+	public void checkBackgroundDefaults() {
+		AzigramParameters defaults = new AzigramParameters();
+		if (fadeThresholdDb <= fadeFloorDb) {
+			backgroundPercentile = defaults.backgroundPercentile;
+			backgroundStepDbPerSecond = defaults.backgroundStepDbPerSecond;
+			backgroundRunInSeconds = defaults.backgroundRunInSeconds;
+			fadeFloorDb = defaults.fadeFloorDb;
+			fadeThresholdDb = defaults.fadeThresholdDb;
+		}
+		if (backgroundMode == null) {
+			backgroundMode = defaults.backgroundMode;
+		}
+		if (absoluteFadeThresholdDb <= absoluteFadeFloorDb) {
+			absoluteFadeFloorDb = defaults.absoluteFadeFloorDb;
+			absoluteFadeThresholdDb = defaults.absoluteFadeThresholdDb;
+		}
+	}
 	
 	@Override
 	public PamParameterSet getParameterSet() {
