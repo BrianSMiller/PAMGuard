@@ -372,6 +372,15 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 				ndp.bearingLineWidth = 0.5f;
 				ndp.maxSourceLevel = 180.;
 			}
+			if (ndp.detectionTimingError <= 0) {
+				ndp.detectionTimingError = 1.0;
+			}
+			if (ndp.maxTimeDelayResidual <= 0) {
+				ndp.maxTimeDelayResidual = 3.0;
+			}
+			if (ndp.maxBearingResidual <= 0) {
+				ndp.maxBearingResidual = 20.0;
+			}
 			return ndp;
 		} catch (CloneNotSupportedException e) {
 			e.printStackTrace();
