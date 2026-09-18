@@ -1326,13 +1326,14 @@ public class DifarProcess extends PamProcess {
 			simplex2D = new Simplex2D();
 		}
 		DIFARTargetMotionInformation tmi = new DIFARTargetMotionInformation(this, detectionList);
+		tmi.setTimingErrorSeconds(difarControl.getDifarParameters().detectionTimingError);
 		simplex2D.setStartPoint(tmi.getMeanPosition());
 		long now = System.currentTimeMillis();
 //		System.out.println("Enter simplex model at " + PamCalendar.formatTime(now, true));
 		TargetMotionResult[] locResult = simplex2D.runModel(tmi);
 //		System.out.println("Exit simplex model after ms " + (System.currentTimeMillis()-now));
 		DIFARCrossingInfo crossInfo = null;
-		if (locResult != null && locResult.length == 1 && localisationOK(detectionList.size(), locResult[0])) {
+		if (locResult != null && locResult.length == 1 && localisationOK(tmi, locResult[0])) {
 //			System.out.println("Localisation latlong = " + locResult[0].getLatLong());
 			LatLong ll = locResult[0].getLatLong();
 			// check the result is vaguely sensible. 
@@ -1351,20 +1352,27 @@ public class DifarProcess extends PamProcess {
 	
 	
 	/**
-	 * Check that the localisation result is reasonable. For two buoys, the 
-	 * chi2 shold be near zero. Need to think a bit about what's acceptable for three. 
-	 * @param nBuoys number of buoys
-	 * @param locResult result. 
-	 * @return true if it seems OKish. 
+	 * Check that the localisation result is reasonable.
+	 * <p>
+	 * The test is how far the fitted position sits from the measurements, in
+	 * degrees and in seconds. Both are quantities an operator can picture, and
+	 * both work the same way for two buoys or three. A fit that fails usually
+	 * means the detections were not the same call.
+	 * <p>
+	 * The previous test compared chi2 with zero for two buoys. Two bearings
+	 * always cross exactly, so that test could never fail.
+	 * @param tmi the detections and buoy positions used for the fit.
+	 * @param locResult result.
+	 * @return true if the fit is close enough to its measurements.
 	 */
-	private boolean localisationOK(int nBuoys, TargetMotionResult locResult) {
-		if (locResult == null) {
+	private boolean localisationOK(DIFARTargetMotionInformation tmi, TargetMotionResult locResult) {
+		if (locResult == null || locResult.getLatLong() == null) {
 			return false;
 		}
-		if (nBuoys == 2 && locResult.getChi2() > 1.0e-6) {
-			return false;
-		}
-		return true;
+		DifarParameters params = difarControl.getDifarParameters();
+		DifarLocalisationResiduals residuals =
+				DifarLocalisationResiduals.calculate(tmi, locResult.getLatLong());
+		return residuals.isWithin(params.maxBearingResidual, params.maxTimeDelayResidual);
 	}
 	
 	/**

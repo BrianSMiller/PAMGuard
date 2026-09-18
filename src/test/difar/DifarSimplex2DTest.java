@@ -14,6 +14,7 @@ import PamDetection.LocContents;
 import PamUtils.LatLong;
 import PamguardMVC.PamDataUnit;
 import difar.DIFARTargetMotionInformation;
+import difar.DifarLocalisationResiduals;
 import difar.targetmotion.Simplex2D;
 import difar.targetmotion.TargetMotionResult;
 import pamMaths.PamVector;
@@ -110,6 +111,45 @@ public class DifarSimplex2DTest {
 				"two bearings and one delay, fitting two coordinates, leaves one degree of freedom");
 		assertTrue(good.getChi2() < 0.1, "consistent measurements should give a small chi2: " + good.getChi2());
 		assertTrue(bad.getChi2() > 10.0, "an 8 second timing error should give a large chi2: " + bad.getChi2());
+	}
+
+	/**
+	 * Residuals at the true source position should be near zero when the
+	 * measurements are exact.
+	 */
+	@Test
+	public void residualsAreSmallForExactMeasurements() {
+		DIFARTargetMotionInformation tmi = buildInfo(THREE_BUOYS, SOURCE, new double[] {0, 0, 0}, 0);
+		DifarLocalisationResiduals residuals = DifarLocalisationResiduals.calculate(tmi, sourceLatLong());
+		assertEquals(0, residuals.getMaxBearingErrorDegrees(), 0.1);
+		assertEquals(0, residuals.getMaxTimeDelayErrorSeconds(), 0.01);
+		assertTrue(residuals.isWithin(20, 3), "exact measurements should pass any sensible limits");
+	}
+
+	/** A bearing error should show up in degrees, and nowhere else. */
+	@Test
+	public void bearingResidualReportsBearingError() {
+		DIFARTargetMotionInformation tmi = buildInfo(THREE_BUOYS, SOURCE, new double[] {0, 0, 15}, 0);
+		DifarLocalisationResiduals residuals = DifarLocalisationResiduals.calculate(tmi, sourceLatLong());
+		assertEquals(15, residuals.getMaxBearingErrorDegrees(), 0.1);
+		assertEquals(0, residuals.getMaxTimeDelayErrorSeconds(), 0.01);
+		assertTrue(residuals.isWithin(20, 3), "15 degrees is within a 20 degree limit");
+		assertTrue(!residuals.isWithin(10, 3), "15 degrees is outside a 10 degree limit");
+	}
+
+	/** A timing error should show up in seconds, and nowhere else. */
+	@Test
+	public void timeDelayResidualReportsTimingError() {
+		DIFARTargetMotionInformation tmi = buildInfo(THREE_BUOYS, SOURCE, new double[] {0, 0, 0}, 8.0);
+		DifarLocalisationResiduals residuals = DifarLocalisationResiduals.calculate(tmi, sourceLatLong());
+		assertEquals(0, residuals.getMaxBearingErrorDegrees(), 0.1);
+		assertEquals(8, residuals.getMaxTimeDelayErrorSeconds(), 0.01);
+		assertTrue(!residuals.isWithin(20, 3), "8 seconds is outside a 3 second limit");
+	}
+
+	/** The true source position, for checking residuals directly. */
+	private LatLong sourceLatLong() {
+		return REF.addDistanceMeters(SOURCE[0], SOURCE[1]);
 	}
 
 	/** Travel time from a source to a buoy, in seconds. */

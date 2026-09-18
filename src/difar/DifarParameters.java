@@ -55,6 +55,27 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 	 * seconds to prepend to each clip to allow for signal locking of the demux algorithm
 	 */
 	public double secondsToPreceed = 0;
+
+	/**
+	 * Timing error of a single detection, in seconds. Detection times are the
+	 * start of a marked clip, so this is coarse. It sets how much weight the
+	 * arrival time differences carry in a localisation.
+	 */
+	public double detectionTimingError = 1.0;
+
+	/**
+	 * Largest acceptable difference, in seconds, between a measured arrival
+	 * time difference and the one the localised position would produce. Fits
+	 * worse than this are rejected, which usually means the detections were not
+	 * the same call.
+	 */
+	public double maxTimeDelayResidual = 3.0;
+
+	/**
+	 * Largest acceptable difference, in degrees, between a measured bearing and
+	 * the bearing to the localised position.
+	 */
+	public double maxBearingResidual = 20.0;
 	
 	/**
 	 * name of the detector module which can trigger difar clips to be made - eg whistle and moan detector
