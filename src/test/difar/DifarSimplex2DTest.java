@@ -19,69 +19,134 @@ import difar.targetmotion.TargetMotionResult;
 import pamMaths.PamVector;
 
 /**
- * Baseline tests for DIFAR bearing-only localisation, before any change to
- * the fit. Buoys and sources are placed on a flat local grid in metres, and
- * each buoy reports the exact true bearing to the source.
+ * Tests for DIFAR localisation from bearings and arrival time differences.
  * <p>
- * The tests drive the real DIFARTargetMotionInformation and Simplex2D.
- * Only the data units are fakes, so no PamController or audio is needed.
+ * Buoys and sources are placed on a flat local grid in metres. Each buoy
+ * reports the true bearing to the source, and a detection time set by the
+ * travel time from the source. Bearing and timing errors can be added to check
+ * that the fit notices them.
+ * <p>
+ * The tests drive the real DIFARTargetMotionInformation and Simplex2D. Only the
+ * data units are fakes, so no PamController and no audio are needed.
  */
 public class DifarSimplex2DTest {
 
 	/** Reference position, in the Southern Ocean. */
 	private static final LatLong REF = new LatLong(-60.0, 140.0);
 
+	/** Speed of sound used by the tests, in metres per second. */
+	private static final double SOUND_SPEED = 1500.;
+
 	/** Bearing standard deviation used by the fakes, in degrees. */
 	private static final double BEARING_SD_DEG = 5.0;
 
-	/** Allowed position error for noise-free bearings, in metres. */
+	/** Timing error of one detection, in seconds. */
+	private static final double TIMING_SD_S = 1.0;
+
+	/** Allowed position error for noise-free measurements, in metres. */
 	private static final double POSITION_TOL_M = 50.0;
+
+	/** Time the source called, in milliseconds. */
+	private static final long CALL_TIME = 1_000_000L;
+
+	private static final double[][] TWO_BUOYS = {{0, 0}, {15000, 0}};
+	private static final double[][] THREE_BUOYS = {{0, 0}, {15000, 0}, {7500, -12000}};
+	private static final double[] SOURCE = {5000, 8000};
 
 	@Test
 	public void pairFindsSource() {
-		double[][] buoys = {{0, 0}, {15000, 0}};
-		double[] source = {5000, 8000};
-		TargetMotionResult result = localise(buoys, source, new double[] {0, 0});
-		assertNearSource(result, source);
-		assertTrue(result.getChi2() < 1e-3, "chi2 for an exact pair should be near zero: " + result.getChi2());
+		TargetMotionResult result = localise(TWO_BUOYS, SOURCE, new double[] {0, 0}, 0);
+		assertNearSource(result, SOURCE);
+		assertTrue(result.getChi2() < 0.1, "chi2 for exact measurements should be small: " + result.getChi2());
 	}
 
 	@Test
 	public void tripletFindsSource() {
-		double[][] buoys = {{0, 0}, {15000, 0}, {7500, -12000}};
-		double[] source = {5000, 8000};
-		TargetMotionResult result = localise(buoys, source, new double[] {0, 0, 0});
-		assertNearSource(result, source);
-		assertTrue(result.getChi2() < 1e-3, "chi2 for exact bearings should be near zero: " + result.getChi2());
+		TargetMotionResult result = localise(THREE_BUOYS, SOURCE, new double[] {0, 0, 0}, 0);
+		assertNearSource(result, SOURCE);
+		assertTrue(result.getChi2() < 0.1, "chi2 for exact measurements should be small: " + result.getChi2());
 	}
 
 	@Test
 	public void tripletWithBadBearingHasLargerChi2() {
-		double[][] buoys = {{0, 0}, {15000, 0}, {7500, -12000}};
-		double[] source = {5000, 8000};
-		TargetMotionResult exact = localise(buoys, source, new double[] {0, 0, 0});
-		TargetMotionResult biased = localise(buoys, source, new double[] {0, 0, 15});
+		TargetMotionResult exact = localise(THREE_BUOYS, SOURCE, new double[] {0, 0, 0}, 0);
+		TargetMotionResult biased = localise(THREE_BUOYS, SOURCE, new double[] {0, 0, 15}, 0);
 		assertTrue(biased.getChi2() > exact.getChi2() + 1.0,
-				"a 15 degree error on one buoy should raise chi2: " + biased.getChi2());
+				"a 15 degree bearing error should raise chi2: " + biased.getChi2());
 	}
 
 	/**
-	 * Build fake DIFAR units for each buoy, then run the real localiser.
+	 * Delays between buoys should match the difference in travel time from the
+	 * source, ordered by PamUtils.indexM1() and indexM2().
+	 */
+	@Test
+	public void timeDelaysMatchGeometry() {
+		DIFARTargetMotionInformation tmi = buildInfo(THREE_BUOYS, SOURCE, new double[] {0, 0, 0}, 0);
+		ArrayList<ArrayList<Double>> delays = tmi.getTimeDelays();
+		assertNotNull(delays);
+		assertEquals(1, delays.size(), "all buoys share a clock, so there is one row");
+		assertEquals(3, delays.get(0).size(), "three buoys give three pairs");
+		int[] m1 = {0, 0, 1};
+		int[] m2 = {1, 2, 2};
+		for (int j = 0; j < 3; j++) {
+			double expected = travelTime(THREE_BUOYS[m2[j]], SOURCE) - travelTime(THREE_BUOYS[m1[j]], SOURCE);
+			assertEquals(expected, delays.get(0).get(j), 0.01,
+					String.format("delay between buoys %d and %d", m1[j], m2[j]));
+		}
+		ArrayList<ArrayList<Double>> errors = tmi.getTimeDelayErrors();
+		assertEquals(TIMING_SD_S * Math.sqrt(2.), errors.get(0).get(0), 1e-9);
+	}
+
+	/**
+	 * Two bearings always cross, so a pair could never fail a bearing-only fit.
+	 * With delays included, a pair whose timing disagrees with its bearings
+	 * should now fail.
+	 */
+	@Test
+	public void pairWithBadDelayIsRejected() {
+		TargetMotionResult good = localise(TWO_BUOYS, SOURCE, new double[] {0, 0}, 0);
+		TargetMotionResult bad = localise(TWO_BUOYS, SOURCE, new double[] {0, 0}, 8.0);
+		assertEquals(1, good.getnDegreesFreedom(),
+				"two bearings and one delay, fitting two coordinates, leaves one degree of freedom");
+		assertTrue(good.getChi2() < 0.1, "consistent measurements should give a small chi2: " + good.getChi2());
+		assertTrue(bad.getChi2() > 10.0, "an 8 second timing error should give a large chi2: " + bad.getChi2());
+	}
+
+	/** Travel time from a source to a buoy, in seconds. */
+	private double travelTime(double[] buoy, double[] source) {
+		return Math.hypot(source[0] - buoy[0], source[1] - buoy[1]) / SOUND_SPEED;
+	}
+
+	/**
+	 * Build the localisation inputs for a set of buoys.
 	 * @param buoys buoy positions in metres, as {x east, y north}
 	 * @param source source position in metres
-	 * @param biasDeg error added to each buoy's bearing, in degrees
-	 * @return the single localisation result
+	 * @param biasDeg bearing error added at each buoy, in degrees
+	 * @param delayBiasSeconds timing error added at the second buoy, in seconds
+	 * @return information ready to pass to the localiser
 	 */
-	private TargetMotionResult localise(double[][] buoys, double[] source, double[] biasDeg) {
+	private DIFARTargetMotionInformation buildInfo(double[][] buoys, double[] source,
+			double[] biasDeg, double delayBiasSeconds) {
 		ArrayList<PamDataUnit> units = new ArrayList<>();
 		for (int i = 0; i < buoys.length; i++) {
 			double dx = source[0] - buoys[i][0];
 			double dy = source[1] - buoys[i][1];
 			double bearingDeg = Math.toDegrees(Math.atan2(dx, dy)) + biasDeg[i];
+			double arrival = travelTime(buoys[i], source) + (i == 1 ? delayBiasSeconds : 0);
+			long timeMillis = CALL_TIME + Math.round(arrival * 1000.);
 			LatLong buoyLL = REF.addDistanceMeters(buoys[i][0], buoys[i][1]);
-			units.add(new FakeBuoyUnit(1000L, i, buoyLL, bearingDeg));
+			units.add(new FakeBuoyUnit(timeMillis, i, buoyLL, bearingDeg));
 		}
 		DIFARTargetMotionInformation tmi = new DIFARTargetMotionInformation(null, units);
+		tmi.setSpeedOfSound(SOUND_SPEED);
+		tmi.setTimingErrorSeconds(TIMING_SD_S);
+		return tmi;
+	}
+
+	/** Build the inputs, then run the real localiser on them. */
+	private TargetMotionResult localise(double[][] buoys, double[] source,
+			double[] biasDeg, double delayBiasSeconds) {
+		DIFARTargetMotionInformation tmi = buildInfo(buoys, source, biasDeg, delayBiasSeconds);
 		Simplex2D simplex = new Simplex2D();
 		simplex.setStartPoint(tmi.getMeanPosition());
 		TargetMotionResult[] results = simplex.runModel(tmi);
@@ -91,7 +156,7 @@ public class DifarSimplex2DTest {
 		return results[0];
 	}
 
-	/** Check a result lies close to the source, measured from the first buoy's origin. */
+	/** Check a result lies close to the source. */
 	private void assertNearSource(TargetMotionResult result, double[] source) {
 		LatLong ll = result.getLatLong();
 		assertNotNull(ll);
