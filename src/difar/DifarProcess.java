@@ -59,6 +59,12 @@ import warnings.WarningSystem;
 
 public class DifarProcess extends PamProcess {
 
+	/**
+	 * Most candidate detections to consider on any one buoy when matching. Only
+	 * likely to bite for an automatic detector on a noisy chorus.
+	 */
+	private static final int MAX_CANDIDATES_PER_BUOY = 10;
+
 	private DifarControl difarControl;
 
 	private PamRawDataBlock rawDataSource;
@@ -1294,60 +1300,51 @@ public class DifarProcess extends PamProcess {
 			return null;
 		}
 		
+		if (difarDataUnit.getLocalisation() == null) {
+			return null;
+		}
 		int nChan = PamUtils.getNumChannels(rawDataSource.getChannelMap());
 		int thisChan = PamUtils.getSingleChannel(difarDataUnit.getChannelBitmap());
-		int aChan;
-		DifarDataUnit[] matchedUnits = new DifarDataUnit[nChan];
-		matchedUnits[0] = difarDataUnit;
-		
-		int finds = 1;
+		DifarParameters params = difarControl.getDifarParameters();
+
+		/*
+		 * Collect every detection on every other buoy that could be this call,
+		 * rather than the single best overlapping one. The best overlap is not
+		 * always the same call, and picking it early leaves no way back.
+		 */
+		ArrayList<ArrayList<PamDataUnit>> candidatesByBuoy = new ArrayList<>();
 		for (int i = 0; i < nChan; i++) {
-			aChan = PamUtils.getNthChannel(i, rawDataSource.getChannelMap());
+			int aChan = PamUtils.getNthChannel(i, rawDataSource.getChannelMap());
 			if (aChan == thisChan) {
 				continue;
 			}
-			DifarDataUnit match = getMatchingUnit(difarDataUnit, aChan);
-			if (match != null) {
-				matchedUnits[finds++] = match;
-			}
+			candidatesByBuoy.add(getMatchingUnits(difarDataUnit, aChan, MAX_CANDIDATES_PER_BUOY));
 		}
-		/*
-		 * Actual number of finds may b e< number of channels. 
-		 */
-		if (finds < 2) return null;
-		
-		ArrayList<PamDataUnit> detectionList = new ArrayList<>();
-		for (int i = 0; i < finds; i++) {
-			if (matchedUnits[i].getLocalisation() == null) continue;
-			detectionList.add(matchedUnits[i]);
-		}
-		
-		if (detectionList.size() < 2) return null;
-		
 
-		if (simplex2D == null) {
-			simplex2D = new Simplex2D();
-		}
-		DIFARTargetMotionInformation tmi = new DIFARTargetMotionInformation(this, detectionList);
-		tmi.setTimingErrorSeconds(difarControl.getDifarParameters().detectionTimingError);
-		simplex2D.setStartPoint(tmi.getMeanPosition());
-		long now = System.currentTimeMillis();
-//		System.out.println("Enter simplex model at " + PamCalendar.formatTime(now, true));
-		TargetMotionResult[] locResult = simplex2D.runModel(tmi);
-//		System.out.println("Exit simplex model after ms " + (System.currentTimeMillis()-now));
+		DifarMatchSelector selector = new DifarMatchSelector(this,
+				params.detectionTimingError, params.maxBearingResidual, params.maxTimeDelayResidual);
+		DifarMatchSelector.Match match = selector.select(difarDataUnit,
+				new ArrayList<List<PamDataUnit>>(candidatesByBuoy));
+
 		DIFARCrossingInfo crossInfo = null;
-		if (locResult != null && locResult.length == 1 && localisationOK(tmi, locResult[0])) {
-//			System.out.println("Localisation latlong = " + locResult[0].getLatLong());
-			LatLong ll = locResult[0].getLatLong();
-			// check the result is vaguely sensible. 
-			if (tmi.getGPSReference().distanceToMiles(ll) < 1000) { 
-				crossInfo = new DIFARCrossingInfo(matchedUnits, locResult[0]);
+		if (match != null) {
+			LatLong ll = match.getResult().getLatLong();
+			DIFARTargetMotionInformation tmi =
+					new DIFARTargetMotionInformation(this, new ArrayList<>(match.getUnits()));
+			// check the result is vaguely sensible.
+			if (tmi.getGPSReference().distanceToMiles(ll) < 1000) {
+				DifarDataUnit[] matchedUnits = new DifarDataUnit[match.getUnits().size()];
+				for (int i = 0; i < matchedUnits.length; i++) {
+					matchedUnits[i] = (DifarDataUnit) match.getUnits().get(i);
+				}
+				crossInfo = new DIFARCrossingInfo(matchedUnits, match.getResult());
 			}
 		}
-		//			crossInfo.setLocation(tmi.metresToLatLong(locResult[0].getLocalisationXYZ()));
-		for (int i = 0; i < finds; i++) {
-			if (matchedUnits[i].getLocalisation() == null) continue;
-			matchedUnits[i].setTempCrossing(crossInfo);
+		difarDataUnit.setTempCrossing(crossInfo);
+		if (match != null) {
+			for (PamDataUnit unit : match.getUnits()) {
+				((DifarDataUnit) unit).setTempCrossing(crossInfo);
+			}
 		}
 		return crossInfo;
 	}
@@ -1379,22 +1376,26 @@ public class DifarProcess extends PamProcess {
 	}
 	
 	/**
-	 * Find the best matching unit from other channels. 
-	 * Criteria are that the calls may overlap in time and also that they 
-	 * overlap in frequency. Select the one with the best overlap in 
-	 * frequency.
+	 * Find the detections on another channel that could be the same call.
+	 * <p>
+	 * A detection qualifies if it is the same species, overlaps in frequency,
+	 * and overlaps in time once the maximum delay between the two buoys is
+	 * allowed for. Which of them is the call is decided later, by localising
+	 * each and comparing the results.
 	 * @param difarDataUnit main unit to match to
-	 * @param aChan other channel number we're looking for. 
-	 * @return matching unit. 
+	 * @param aChan other channel number we're looking for.
+	 * @param maxUnits most units to return, best overlap first. A cap is only
+	 * likely to matter for an automatic detector on a noisy chorus.
+	 * @return qualifying units, best overlap first. Never null.
 	 */
-	private DifarDataUnit getMatchingUnit(DifarDataUnit difarDataUnit, int aChan) {
+	private ArrayList<PamDataUnit> getMatchingUnits(DifarDataUnit difarDataUnit, int aChan, int maxUnits) {
 		int thisChan = PamUtils.getSingleChannel(difarDataUnit.getChannelBitmap());
 		PamArray array = ArrayManager.getArrayManager().getCurrentArray();
 		double arraySep = array.getSeparation(thisChan, aChan, difarDataUnit.getTimeMilliseconds());
 		long sepMillis = (long) (arraySep /  array.getSpeedOfSound() * 1000.); 
 		DifarDataUnit otherUnit;
-		double bestOverlap = 0;
-		DifarDataUnit bestDifarUnit = null;
+		ArrayList<DifarDataUnit> found = new ArrayList<>();
+		ArrayList<Double> scores = new ArrayList<>();
 		double[] thisFreq = difarDataUnit.getFrequency();
 		long thisStart = difarDataUnit.getTimeMilliseconds();
 		long thisEnd = thisStart + (long) (difarDataUnit.getDurationInSeconds() * 1000.);
@@ -1416,17 +1417,30 @@ public class DifarProcess extends PamProcess {
 				if (tOverlap <= 0 || fOverlap <= 0) {
 					continue;
 				}
-				double olapScore = (double) tOverlap / (double) (thisEnd-thisStart) + fOverlap / (thisFreq[1]-thisFreq[0]);
-				if (olapScore > bestOverlap ) {
-					bestOverlap = olapScore;
-					bestDifarUnit = otherUnit;
+				if (otherUnit.getLocalisation() == null) {
+					continue;
 				}
-//				if (tOverlap > 0 && fOverlap > 0) {
-//					System.out.println(String.format("Overlapping in t %3.1fs, and f %3.1Hz", (double) tOverlap/1000, fOverlap));
-//				}
+				double olapScore = (double) tOverlap / (double) (thisEnd-thisStart) + fOverlap / (thisFreq[1]-thisFreq[0]);
+				found.add(otherUnit);
+				scores.add(olapScore);
 			}
 		}
-		return bestDifarUnit;
+		/*
+		 * Sort by overlap, best first, so that the cap keeps the most likely
+		 * candidates. Lists are short, so a simple sort is plenty.
+		 */
+		ArrayList<PamDataUnit> sorted = new ArrayList<>();
+		while (!found.isEmpty() && sorted.size() < maxUnits) {
+			int best = 0;
+			for (int i = 1; i < scores.size(); i++) {
+				if (scores.get(i) > scores.get(best)) {
+					best = i;
+				}
+			}
+			sorted.add(found.remove(best));
+			scores.remove(best);
+		}
+		return sorted;
 	}
 	
 	/**

@@ -61,6 +61,20 @@ public class DifarTestScenario {
 	}
 
 	/**
+	 * @return the detections added so far, in the order they were added.
+	 */
+	public ArrayList<PamDataUnit> getUnits() {
+		return units;
+	}
+
+	/**
+	 * @return the last detection added.
+	 */
+	public PamDataUnit getLastUnit() {
+		return units.get(units.size() - 1);
+	}
+
+	/**
 	 * @param timingErrorSeconds the timing error the fit should assume, in
 	 * seconds. This is what the fit is told, which need not match the errors
 	 * that were actually added.
