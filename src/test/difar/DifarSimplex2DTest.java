@@ -8,16 +8,11 @@ import java.util.ArrayList;
 
 import org.junit.jupiter.api.Test;
 
-import GPS.GpsData;
-import PamDetection.AbstractLocalisation;
-import PamDetection.LocContents;
 import PamUtils.LatLong;
-import PamguardMVC.PamDataUnit;
 import difar.DIFARTargetMotionInformation;
 import difar.DifarLocalisationResiduals;
 import difar.targetmotion.Simplex2D;
 import difar.targetmotion.TargetMotionResult;
-import pamMaths.PamVector;
 
 /**
  * Tests for DIFAR localisation from bearings and arrival time differences.
@@ -32,23 +27,11 @@ import pamMaths.PamVector;
  */
 public class DifarSimplex2DTest {
 
-	/** Reference position, in the Southern Ocean. */
-	private static final LatLong REF = new LatLong(-60.0, 140.0);
-
-	/** Speed of sound used by the tests, in metres per second. */
-	private static final double SOUND_SPEED = 1500.;
-
-	/** Bearing standard deviation used by the fakes, in degrees. */
-	private static final double BEARING_SD_DEG = 5.0;
-
 	/** Timing error of one detection, in seconds. */
 	private static final double TIMING_SD_S = 1.0;
 
 	/** Allowed position error for noise-free measurements, in metres. */
 	private static final double POSITION_TOL_M = 50.0;
-
-	/** Time the source called, in milliseconds. */
-	private static final long CALL_TIME = 1_000_000L;
 
 	private static final double[][] TWO_BUOYS = {{0, 0}, {15000, 0}};
 	private static final double[][] THREE_BUOYS = {{0, 0}, {15000, 0}, {7500, -12000}};
@@ -149,12 +132,12 @@ public class DifarSimplex2DTest {
 
 	/** The true source position, for checking residuals directly. */
 	private LatLong sourceLatLong() {
-		return REF.addDistanceMeters(SOURCE[0], SOURCE[1]);
+		return DifarTestScenario.toLatLong(SOURCE);
 	}
 
 	/** Travel time from a source to a buoy, in seconds. */
 	private double travelTime(double[] buoy, double[] source) {
-		return Math.hypot(source[0] - buoy[0], source[1] - buoy[1]) / SOUND_SPEED;
+		return DifarTestScenario.travelTime(buoy, source);
 	}
 
 	/**
@@ -167,20 +150,11 @@ public class DifarSimplex2DTest {
 	 */
 	private DIFARTargetMotionInformation buildInfo(double[][] buoys, double[] source,
 			double[] biasDeg, double delayBiasSeconds) {
-		ArrayList<PamDataUnit> units = new ArrayList<>();
+		DifarTestScenario scenario = new DifarTestScenario();
 		for (int i = 0; i < buoys.length; i++) {
-			double dx = source[0] - buoys[i][0];
-			double dy = source[1] - buoys[i][1];
-			double bearingDeg = Math.toDegrees(Math.atan2(dx, dy)) + biasDeg[i];
-			double arrival = travelTime(buoys[i], source) + (i == 1 ? delayBiasSeconds : 0);
-			long timeMillis = CALL_TIME + Math.round(arrival * 1000.);
-			LatLong buoyLL = REF.addDistanceMeters(buoys[i][0], buoys[i][1]);
-			units.add(new FakeBuoyUnit(timeMillis, i, buoyLL, bearingDeg));
+			scenario.addDetection(buoys[i], source, biasDeg[i], i == 1 ? delayBiasSeconds : 0);
 		}
-		DIFARTargetMotionInformation tmi = new DIFARTargetMotionInformation(null, units);
-		tmi.setSpeedOfSound(SOUND_SPEED);
-		tmi.setTimingErrorSeconds(TIMING_SD_S);
-		return tmi;
+		return scenario.build(TIMING_SD_S);
 	}
 
 	/** Build the inputs, then run the real localiser on them. */
@@ -200,60 +174,8 @@ public class DifarSimplex2DTest {
 	private void assertNearSource(TargetMotionResult result, double[] source) {
 		LatLong ll = result.getLatLong();
 		assertNotNull(ll);
-		double x = REF.distanceToMetresX(ll);
-		double y = REF.distanceToMetresY(ll);
-		double err = Math.hypot(x - source[0], y - source[1]);
+		double err = DifarTestScenario.distanceFrom(ll, source);
 		assertTrue(err < POSITION_TOL_M, String.format(
-				"expected (%.0f, %.0f), got (%.0f, %.0f), error %.0f m", source[0], source[1], x, y, err));
-	}
-
-	/** A data unit on one buoy, with a fixed position and one true bearing. */
-	private static class FakeBuoyUnit extends PamDataUnit {
-
-		private final GpsData origin;
-
-		FakeBuoyUnit(long timeMillis, int channel, LatLong position, double bearingDeg) {
-			super(timeMillis);
-			setChannelBitmap(1 << channel);
-			origin = new GpsData(position);
-			setLocalisation(new FakeBearing(this, bearingDeg));
-		}
-
-		@Override
-		public GpsData getOriginLatLong(boolean recalculate) {
-			return origin;
-		}
-	}
-
-	/** A single true bearing with a fixed error, shaped like DifarLocalisation. */
-	private static class FakeBearing extends AbstractLocalisation {
-
-		private final double bearingDeg;
-
-		FakeBearing(PamDataUnit unit, double bearingDeg) {
-			super(unit, LocContents.HAS_BEARING, 0);
-			this.bearingDeg = bearingDeg;
-		}
-
-		@Override
-		public boolean bearingAmbiguity() {
-			return false;
-		}
-
-		@Override
-		public double[] getAngles() {
-			return new double[] {Math.toRadians(bearingDeg)};
-		}
-
-		@Override
-		public double[] getAngleErrors() {
-			return new double[] {Math.toRadians(BEARING_SD_DEG)};
-		}
-
-		@Override
-		public PamVector[] getWorldVectors() {
-			double radians = Math.toRadians(90 - bearingDeg);
-			return new PamVector[] {new PamVector(Math.cos(radians), Math.sin(radians), 0)};
-		}
+				"expected (%.0f, %.0f), error %.0f m", source[0], source[1], err));
 	}
 }

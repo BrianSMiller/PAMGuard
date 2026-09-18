@@ -61,7 +61,7 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 	 * start of a marked clip, so this is coarse. It sets how much weight the
 	 * arrival time differences carry in a localisation.
 	 */
-	public double detectionTimingError = 1.0;
+	public double detectionTimingError = 2.0;
 
 	/**
 	 * Largest acceptable difference, in seconds, between a measured arrival
@@ -69,13 +69,26 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 	 * worse than this are rejected, which usually means the detections were not
 	 * the same call.
 	 */
-	public double maxTimeDelayResidual = 3.0;
+	public double maxTimeDelayResidual = 6.0;
 
 	/**
 	 * Largest acceptable difference, in degrees, between a measured bearing and
 	 * the bearing to the localised position.
 	 */
 	public double maxBearingResidual = 20.0;
+
+	/**
+	 * Standard deviation of a DIFAR bearing, in degrees. This sets how much
+	 * weight bearings carry in a localisation, against the arrival time
+	 * differences.
+	 * <p>
+	 * IWC paper SC-65b-SH08 reports 95% of bearings within 10 degrees of the
+	 * mean, which is a standard deviation of about 5 degrees. A well behaved
+	 * array can reach 2 degrees. Bearings are much worse when the source is
+	 * close to a buoy that has drifted from its recorded position, since a
+	 * small error in the buoy position is then a large error in angle.
+	 */
+	public double bearingError = 5.0;
 	
 	/**
 	 * name of the detector module which can trigger difar clips to be made - eg whistle and moan detector
@@ -373,13 +386,16 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 				ndp.maxSourceLevel = 180.;
 			}
 			if (ndp.detectionTimingError <= 0) {
-				ndp.detectionTimingError = 1.0;
+				ndp.detectionTimingError = 2.0;
 			}
 			if (ndp.maxTimeDelayResidual <= 0) {
-				ndp.maxTimeDelayResidual = 3.0;
+				ndp.maxTimeDelayResidual = 6.0;
 			}
 			if (ndp.maxBearingResidual <= 0) {
 				ndp.maxBearingResidual = 20.0;
+			}
+			if (ndp.bearingError <= 0) {
+				ndp.bearingError = 5.0;
 			}
 			return ndp;
 		} catch (CloneNotSupportedException e) {
