@@ -275,7 +275,10 @@ public class DifarBinaryDataSource extends BinaryDataSource {
 		difarDataUnit.setDisplaySampleRate(displaySampleRate);
 		difarDataUnit.setSpeciesCode(difarControl.difarParameters.getSpeciesList(difarControl), speciesCode);
 		difarDataUnit.setTrackedGroup(trackedGroup);
-		difarDataUnit.setLocalisation(new DifarLocalisation(difarDataUnit, LocContents.HAS_BEARING, difarDataUnit.getChannelBitmap()));
+		DifarLocalisation difarLocalisation = new DifarLocalisation(difarDataUnit,
+				LocContents.HAS_BEARING, difarDataUnit.getChannelBitmap());
+		difarLocalisation.setBearingError(difarControl.getDifarParameters().bearingError);
+		difarDataUnit.setLocalisation(difarLocalisation);
 		if (matchedUnits != null) {
 			matchedUnits[0] = difarDataUnit;
 			DIFARCrossingInfo dci = new DIFARCrossingInfo(matchedUnits, latLong, errors);

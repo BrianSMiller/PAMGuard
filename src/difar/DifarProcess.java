@@ -550,7 +550,10 @@ public class DifarProcess extends PamProcess {
 			demuxWorker.ppublish(new DemuxWorkerMessage(difarDataUnit, DemuxWorkerMessage.STATUS_DONEDIFARCALC, System.currentTimeMillis()-startTime));
 		}
 
-		difarDataUnit.setLocalisation(new DifarLocalisation(difarDataUnit, LocContents.HAS_BEARING, difarDataUnit.getChannelBitmap()));
+		DifarLocalisation difarLocalisation = new DifarLocalisation(difarDataUnit,
+				LocContents.HAS_BEARING, difarDataUnit.getChannelBitmap());
+		difarLocalisation.setBearingError(difarControl.getDifarParameters().bearingError);
+		difarDataUnit.setLocalisation(difarLocalisation);
 
 		getDifarRangeInfo(difarDataUnit);
 		

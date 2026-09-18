@@ -139,7 +139,7 @@ public class DifarParamsDialog extends PamDialog {
 	private JCheckBox useSummaryLine;
 
 //	Localisation
-	private JTextField detectionTimingError, maxTimeDelayResidual, maxBearingResidual;
+	private JTextField detectionTimingError, maxTimeDelayResidual, maxBearingResidual, bearingError;
 	private SourcePanel calibrationSourcePanel;
 	private JCheckBox loadViewerClips;
 	
@@ -306,7 +306,14 @@ public class DifarParamsDialog extends PamDialog {
 		maxBearingResidual.setToolTipText("<HTML>Largest difference allowed between a measured bearing and the<br>"
 				+ "bearing to the calculated position.</HTML>");
 
-		JComponent[] localisation = {detectionTimingError, maxTimeDelayResidual, maxBearingResidual};
+		bearingError = new JTextField();
+		bearingError.setName("Bearing error (deg)");
+		bearingError.setToolTipText("<HTML>Standard deviation of a DIFAR bearing.<br>"
+				+ "This sets how much weight bearings carry against arrival time<br>"
+				+ "differences when a position is calculated. Around 5 degrees is<br>"
+				+ "typical, and a well behaved array can reach 2 degrees.</HTML>");
+
+		JComponent[] localisation = {bearingError, detectionTimingError, maxTimeDelayResidual, maxBearingResidual};
 		PamPanel localisationPanel = new PamPanel(new GridBagLayout());
 		localisationPanel.setBorder(new TitledBorder("Localisation"));
 		PamPanel.layoutGrid(localisationPanel, localisation);
@@ -613,6 +620,7 @@ public class DifarParamsDialog extends PamDialog {
 		
 		demuxType.setSelectedItem(difarParameters.demuxType);
 
+		bearingError.setText(new Double(difarParameters.bearingError).toString());
 		detectionTimingError.setText(new Double(difarParameters.detectionTimingError).toString());
 		maxTimeDelayResidual.setText(new Double(difarParameters.maxTimeDelayResidual).toString());
 		maxBearingResidual.setText(new Double(difarParameters.maxBearingResidual).toString());
@@ -689,15 +697,17 @@ public class DifarParamsDialog extends PamDialog {
 			return showWarning("Processing Parameter Problem");
 		}
 		try{
+			double bearingSd = Double.valueOf(bearingError.getText());
 			double timingError = Double.valueOf(detectionTimingError.getText());
 			double maxDelay = Double.valueOf(maxTimeDelayResidual.getText());
 			double maxBearing = Double.valueOf(maxBearingResidual.getText());
-			if (timingError <= 0 || maxDelay <= 0 || maxBearing <= 0) {
+			if (bearingSd <= 0 || timingError <= 0 || maxDelay <= 0 || maxBearing <= 0) {
 				return showWarning("Localisation settings must all be greater than zero");
 			}
 			if (maxBearing > 180) {
 				return showWarning("Max bearing residual cannot be more than 180 degrees");
 			}
+			difarParameters.bearingError = bearingSd;
 			difarParameters.detectionTimingError = timingError;
 			difarParameters.maxTimeDelayResidual = maxDelay;
 			difarParameters.maxBearingResidual = maxBearing;
@@ -824,6 +834,7 @@ public class DifarParamsDialog extends PamDialog {
 		
 		demuxType.setSelectedItem(newDifarParameters.demuxType);
 
+		bearingError.setText(new Double(newDifarParameters.bearingError).toString());
 		detectionTimingError.setText(new Double(newDifarParameters.detectionTimingError).toString());
 		maxTimeDelayResidual.setText(new Double(newDifarParameters.maxTimeDelayResidual).toString());
 		maxBearingResidual.setText(new Double(newDifarParameters.maxBearingResidual).toString());
