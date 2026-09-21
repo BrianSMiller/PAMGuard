@@ -1395,10 +1395,15 @@ public class DifarProcess extends PamProcess {
 	 * @return qualifying units, best overlap first. Never null.
 	 */
 	private ArrayList<PamDataUnit> getMatchingUnits(DifarDataUnit difarDataUnit, int aChan, int maxUnits) {
-		int thisChan = PamUtils.getSingleChannel(difarDataUnit.getChannelBitmap());
 		PamArray array = ArrayManager.getArrayManager().getCurrentArray();
-		double arraySep = array.getSeparation(thisChan, aChan, difarDataUnit.getTimeMilliseconds());
-		long sepMillis = (long) (arraySep /  array.getSpeedOfSound() * 1000.); 
+		double speedOfSound = array.getSpeedOfSound();
+		/*
+		 * Allow for clips being marked late or early, as well as for the travel
+		 * time between buoys. Otherwise a call whose clip was marked a little
+		 * late on the far buoy would never be considered.
+		 */
+		long markingSlackMillis = (long) (difarControl.getDifarParameters().maxTimeDelayResidual * 1000.);
+		GpsData thisOrigin = difarDataUnit.getOriginLatLong(false);
 		DifarDataUnit otherUnit;
 		ArrayList<DifarDataUnit> found = new ArrayList<>();
 		ArrayList<Double> scores = new ArrayList<>();
@@ -1418,6 +1423,7 @@ public class DifarProcess extends PamProcess {
 				}
 				thatStart = otherUnit.getTimeMilliseconds();
 				thatEnd = thatStart + (long) (otherUnit.getDurationInSeconds() * 1000.);
+				long sepMillis = getTravelTimeMillis(thisOrigin, otherUnit, speedOfSound) + markingSlackMillis;
 				long tOverlap = getTimeOverlap(sepMillis, thisStart, thisEnd, thatStart, thatEnd);
 				double fOverlap = getFreqOverlap(thisFreq, otherUnit.getFrequency());
 				if (tOverlap <= 0 || fOverlap <= 0) {
@@ -1489,6 +1495,32 @@ public class DifarProcess extends PamProcess {
 	 * @param end2 end time of second call in millis
 	 * @return overall in milliseconds or -1 if no overlap. 
 	 */
+	/**
+	 * Longest a sound can take to travel between two buoys, in milliseconds.
+	 * <p>
+	 * The distance comes from the buoy positions of the two detections, which
+	 * are also what the localisation uses. The array geometry cannot be used
+	 * here: PamArray.getSeparation() adds hydrophone offsets to each streamer's
+	 * local coordinates, and a DIFAR buoy is placed by its latitude and
+	 * longitude instead, so its local coordinates are zero and the separation
+	 * between any two buoys came out as zero. That limited matching to clips
+	 * that overlapped in time.
+	 * @param thisOrigin position of the first buoy, or null if not known.
+	 * @param otherUnit a detection on the second buoy.
+	 * @param speedOfSound speed of sound in metres per second.
+	 * @return travel time in milliseconds, or zero if either position is unknown.
+	 */
+	private long getTravelTimeMillis(GpsData thisOrigin, DifarDataUnit otherUnit, double speedOfSound) {
+		if (thisOrigin == null || speedOfSound <= 0) {
+			return 0;
+		}
+		GpsData otherOrigin = otherUnit.getOriginLatLong(false);
+		if (otherOrigin == null) {
+			return 0;
+		}
+		return (long) (thisOrigin.distanceToMetres(otherOrigin) / speedOfSound * 1000.);
+	}
+
 	private long getTimeOverlap(long sepMillis, long start1, long end1, long start2, long end2) {
 		if (start1 > end2 + sepMillis || start2 > end1 + sepMillis) return -1; // no overlap
 		start2 = Math.min(start2, start1-sepMillis);// In case latter portion of detection2 overlaps
