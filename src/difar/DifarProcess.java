@@ -65,6 +65,9 @@ public class DifarProcess extends PamProcess {
 	 */
 	private static final int MAX_CANDIDATES_PER_BUOY = 10;
 
+	/** Candidate matches for recent detections, for the matching display. */
+	private DifarMatchLog matchLog = new DifarMatchLog();
+
 	private DifarControl difarControl;
 
 	private PamRawDataBlock rawDataSource;
@@ -1329,8 +1332,16 @@ public class DifarProcess extends PamProcess {
 
 		DifarMatchSelector selector = new DifarMatchSelector(this,
 				params.detectionTimingError, params.maxBearingResidual, params.maxTimeDelayResidual);
-		DifarMatchSelector.Match match = selector.select(difarDataUnit,
+		List<DifarMatchSelector.Match> candidates = selector.selectAll(difarDataUnit,
 				new ArrayList<List<PamDataUnit>>(candidatesByBuoy));
+		matchLog.put(difarDataUnit, candidates);
+		DifarMatchSelector.Match match = null;
+		for (DifarMatchSelector.Match candidate : candidates) {
+			if (candidate.isAccepted()) {
+				match = candidate;
+				break;
+			}
+		}
 
 		DIFARCrossingInfo crossInfo = null;
 		if (match != null) {
@@ -1381,6 +1392,14 @@ public class DifarProcess extends PamProcess {
 		return residuals.isWithin(params.maxBearingResidual, params.maxTimeDelayResidual);
 	}
 	
+
+	/**
+	 * @return the candidate matches worked out for recent detections.
+	 */
+	public DifarMatchLog getMatchLog() {
+		return matchLog;
+	}
+
 	/**
 	 * Find the detections on another channel that could be the same call.
 	 * <p>

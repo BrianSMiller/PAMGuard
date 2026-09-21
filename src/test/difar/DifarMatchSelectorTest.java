@@ -2,6 +2,7 @@ package test.difar;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -145,6 +146,61 @@ public class DifarMatchSelectorTest {
 		DifarTestScenario scenario = new DifarTestScenario();
 		scenario.addDetection(BUOY_A, WHALE, 0, 0);
 		assertNull(select(scenario.getLastUnit(), new ArrayList<List<PamDataUnit>>()));
+	}
+
+
+	/**
+	 * Every group that was tried should be reported, in the order they were
+	 * preferred, with a reason against each one that lost. This is what a
+	 * display needs to show why a call was not matched.
+	 */
+	@Test
+	public void reportsEveryCandidateConsidered() {
+		DifarTestScenario scenario = new DifarTestScenario();
+		scenario.addDetection(BUOY_A, WHALE, 0, 0);
+		PamDataUnit seed = scenario.getLastUnit();
+		scenario.addDetection(BUOY_B, WHALE, 0, 0);
+		PamDataUnit rightOne = scenario.getLastUnit();
+		scenario.addDetection(BUOY_B, new double[] {11000, 20000}, 0, 0);
+		PamDataUnit wrongOne = scenario.getLastUnit();
+
+		DifarMatchSelector selector = new DifarMatchSelector(null,
+				TIMING_ERROR_S, MAX_BEARING_DEG, MAX_DELAY_S);
+		List<DifarMatchSelector.Match> all =
+				selector.selectAll(seed, Arrays.asList(Arrays.asList(rightOne, wrongOne)));
+
+		assertEquals(2, all.size(), "both candidates should be reported");
+		assertTrue(all.get(0).isAccepted(), "the correct call should rank first");
+		assertTrue(all.get(0).getUnits().contains(rightOne));
+		assertNull(all.get(0).getRejectReason(), "an accepted match has no reason against it");
+
+		DifarMatchSelector.Match rejected = all.get(1);
+		assertTrue(!rejected.isAccepted());
+		assertTrue(rejected.getUnits().contains(wrongOne));
+		assertNotNull(rejected.getRejectReason());
+		assertTrue(rejected.getRejectReason().contains("timing"),
+				"this one fails on timing: " + rejected.getRejectReason());
+		System.out.println("rejected because: " + rejected.getRejectReason());
+	}
+
+	/** A group that fails on bearings should say so, not blame the timing. */
+	@Test
+	public void reasonNamesTheMeasurementThatFailed() {
+		DifarTestScenario scenario = new DifarTestScenario();
+		scenario.addDetection(BUOY_A, WHALE, 0, 0);
+		PamDataUnit seed = scenario.getLastUnit();
+		scenario.addDetection(BUOY_B, new double[] {10000, -8000}, 0, 0);
+		PamDataUnit oppositeSide = scenario.getLastUnit();
+
+		DifarMatchSelector selector = new DifarMatchSelector(null,
+				TIMING_ERROR_S, MAX_BEARING_DEG, MAX_DELAY_S);
+		List<DifarMatchSelector.Match> all =
+				selector.selectAll(seed, Arrays.asList(Arrays.asList(oppositeSide)));
+		assertEquals(1, all.size());
+		assertTrue(!all.get(0).isAccepted());
+		assertTrue(all.get(0).getRejectReason().contains("bearing"),
+				"whales on opposite sides fail on bearings first: " + all.get(0).getRejectReason());
+		System.out.println("rejected because: " + all.get(0).getRejectReason());
 	}
 
 	private DifarMatchSelector.Match select(PamDataUnit seed, List<List<PamDataUnit>> candidates) {

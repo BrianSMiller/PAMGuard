@@ -57,6 +57,8 @@ import difar.display.DifarDisplayContainer2;
 import difar.display.DifarDisplayProvider;
 import difar.display.DifarDisplayProvider2;
 import difar.display.DifarSidePanel;
+import difar.display.DifarMatchContainer;
+import difar.display.DifarMatchProvider;
 import difar.display.SonobuoyManagerContainer;
 import difar.display.SonobuoyManagerProvider;
 import difar.offline.DifarDataCopyTask;
@@ -88,6 +90,10 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 	private SonobuoyManagerProvider sonobuoyManagerProvider;
 	
 	private SonobuoyManagerContainer sonobuoyManagerContainer;
+
+	private DifarMatchProvider matchProvider;
+
+	private DifarMatchContainer matchContainer;
 	 
 	private SpectrogramObserver spectrogramObserver = new SpectrogramObserver();
 	
@@ -140,6 +146,9 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 		}
 		displayProvider = new DifarDisplayProvider(this);
 		UserDisplayControl.addUserDisplayProvider(displayProvider);
+		displayUnits.add(getMatchContainer().getMatchPanel());
+		matchProvider = new DifarMatchProvider(this);
+		UserDisplayControl.addUserDisplayProvider(matchProvider);
 		sonobuoyManagerProvider = new SonobuoyManagerProvider(this);
 		UserDisplayControl.addUserDisplayProvider(sonobuoyManagerProvider);
 		
@@ -326,6 +335,16 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 		return difarDisplayContainer2;
 	}
 	
+	/**
+	 * @return the container for the match candidate table, making it if needed.
+	 */
+	public DifarMatchContainer getMatchContainer() {
+		if (matchContainer == null) {
+			matchContainer = new DifarMatchContainer(this);
+		}
+		return matchContainer;
+	}
+
 	public SonobuoyManagerContainer getSonobuoyManagerContainer() {
 		if (sonobuoyManagerContainer == null) {
 			sonobuoyManagerContainer = new SonobuoyManagerContainer(this);

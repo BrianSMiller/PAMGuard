@@ -34,7 +34,7 @@ import difar.targetmotion.TargetMotionResult;
  */
 public class DifarMatchSelector {
 
-	/** A group of detections, localised. */
+	/** A group of detections, localised, and whether it was accepted. */
 	public static class Match {
 
 		private final List<PamDataUnit> units;
@@ -43,11 +43,31 @@ public class DifarMatchSelector {
 
 		private final DifarLocalisationResiduals residuals;
 
+		private final String rejectReason;
+
 		private Match(List<PamDataUnit> units, TargetMotionResult result,
-				DifarLocalisationResiduals residuals) {
+				DifarLocalisationResiduals residuals, String rejectReason) {
 			this.units = units;
 			this.result = result;
 			this.residuals = residuals;
+			this.rejectReason = rejectReason;
+		}
+
+		/**
+		 * @return true if this group passed the residual limits. Only accepted
+		 * groups are used, but the rejected ones are kept so that a display can
+		 * show what else was considered.
+		 */
+		public boolean isAccepted() {
+			return rejectReason == null;
+		}
+
+		/**
+		 * @return why this group was not used, in a form fit to show a user, or
+		 * null if it was accepted.
+		 */
+		public String getRejectReason() {
+			return rejectReason;
 		}
 
 		/** @return the detections in this group, the seed first. */
@@ -111,42 +131,61 @@ public class DifarMatchSelector {
 	 * @return the best match, or null if no group passed the limits.
 	 */
 	public Match select(PamDataUnit seed, List<List<PamDataUnit>> candidatesByBuoy) {
-		if (seed == null || candidatesByBuoy == null) {
-			return null;
-		}
-		Match best = null;
-		for (List<PamDataUnit> group : combinations(seed, candidatesByBuoy)) {
-			Match match = localise(group);
-			if (match == null) {
-				continue;
-			}
-			if (!match.getResiduals().isWithin(maxBearingResidual, maxTimeDelayResidual)) {
-				continue;
-			}
-			if (isBetter(match, best)) {
-				best = match;
+		List<Match> all = selectAll(seed, candidatesByBuoy);
+		for (Match match : all) {
+			if (match.isAccepted()) {
+				return match;
 			}
 		}
-		return best;
+		return null;
 	}
 
 	/**
-	 * @return true if a match should replace the best one so far. Bigger groups
-	 * win. Between groups of the same size, the closer fit wins.
+	 * Localise every group that includes the seed, and rank them.
+	 * <p>
+	 * Accepted groups come first, best first, so the first entry is the match
+	 * that would be used. Rejected groups follow in the same order, each
+	 * carrying the reason it was not used. Nothing is discarded, so a display
+	 * can show a user what else was considered and why it lost.
+	 * @param seed the detection being matched.
+	 * @param candidatesByBuoy candidate detections, one list per other buoy.
+	 * @return every group tried, ranked. Empty if there was nothing to try.
 	 */
-	private boolean isBetter(Match match, Match best) {
-		if (best == null) {
-			return true;
+	public List<Match> selectAll(PamDataUnit seed, List<List<PamDataUnit>> candidatesByBuoy) {
+		List<Match> matches = new ArrayList<>();
+		if (seed == null || candidatesByBuoy == null) {
+			return matches;
 		}
-		if (match.getUnits().size() != best.getUnits().size()) {
-			return match.getUnits().size() > best.getUnits().size();
+		for (List<PamDataUnit> group : combinations(seed, candidatesByBuoy)) {
+			Match match = localise(group);
+			if (match != null) {
+				matches.add(match);
+			}
 		}
-		double theirs = best.getChi2PerDegreeOfFreedom();
-		double ours = match.getChi2PerDegreeOfFreedom();
-		if (Double.isNaN(ours)) {
-			return false;
-		}
-		return Double.isNaN(theirs) || ours < theirs;
+		sortBest(matches);
+		return matches;
+	}
+
+	/**
+	 * Sort matches so that the one to use comes first: accepted before
+	 * rejected, then larger groups, then the closer fit.
+	 * @param matches the matches to sort, in place.
+	 */
+	private void sortBest(List<Match> matches) {
+		matches.sort((a, b) -> {
+			if (a.isAccepted() != b.isAccepted()) {
+				return a.isAccepted() ? -1 : 1;
+			}
+			if (a.getUnits().size() != b.getUnits().size()) {
+				return b.getUnits().size() - a.getUnits().size();
+			}
+			double chiA = a.getChi2PerDegreeOfFreedom();
+			double chiB = b.getChi2PerDegreeOfFreedom();
+			if (Double.isNaN(chiA) || Double.isNaN(chiB)) {
+				return Double.isNaN(chiA) ? (Double.isNaN(chiB) ? 0 : 1) : -1;
+			}
+			return Double.compare(chiA, chiB);
+		});
 	}
 
 	/**
@@ -202,6 +241,23 @@ public class DifarMatchSelector {
 		}
 		DifarLocalisationResiduals residuals =
 				DifarLocalisationResiduals.calculate(info, results[0].getLatLong());
-		return new Match(units, results[0], residuals);
+		return new Match(units, results[0], residuals, rejectReason(residuals));
+	}
+
+	/**
+	 * @param residuals how far a fit sits from its measurements.
+	 * @return why the fit should not be used, in a form fit to show a user, or
+	 * null if it is close enough.
+	 */
+	private String rejectReason(DifarLocalisationResiduals residuals) {
+		double bearing = residuals.getMaxBearingErrorDegrees();
+		if (!Double.isNaN(bearing) && bearing > maxBearingResidual) {
+			return String.format("bearing out by %.1f deg, limit %.1f", bearing, maxBearingResidual);
+		}
+		double timing = residuals.getMaxTimeDelayErrorSeconds();
+		if (!Double.isNaN(timing) && timing > maxTimeDelayResidual) {
+			return String.format("timing out by %.1f s, limit %.1f", timing, maxTimeDelayResidual);
+		}
+		return null;
 	}
 }
