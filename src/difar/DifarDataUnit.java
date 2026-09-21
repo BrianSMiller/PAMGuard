@@ -2,12 +2,17 @@ package difar;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 
 import Filters.Filter;
 import Filters.FilterBand;
 import Filters.FilterMethod;
 import Filters.FilterParams;
 import Filters.FilterType;
+import Array.ArrayManager;
+import Array.Hydrophone;
+import Array.PamArray;
+import Array.Streamer;
 import GPS.GpsData;
 import PamUtils.FrequencyFormat;
 import PamUtils.LatLong;
@@ -281,7 +286,15 @@ public class DifarDataUnit extends ClipDataUnit {
 	
 	private double[] getDecimatedWaveData(int channel, float displaySampRate) {
 		float origSmp = getSourceSampleRate(); 
-		if (displaySampRate == origSmp){
+		/*
+		 * In viewer mode the original waveform is not stored, so there is
+		 * nothing to decimate. The demodulated data is used instead, by the
+		 * caller.
+		 */
+		if (getWaveData(channel) == null) {
+			return null;
+		}
+		if (displaySampRate == origSmp || origSmp <= 0){
 			return getWaveData(channel);
 		}
 		if (decimatedData == null || displaySampRate != lastDecmiatedSampleRate) {
@@ -409,13 +422,55 @@ public class DifarDataUnit extends ClipDataUnit {
 		if (selectedAngle == null) {
 			return null;
 		}
-		GpsData originPos = getOriginLatLong(false);
-		if (originPos == null || originPos.getTrueHeading() == null) {
+		Double heading = getBuoyHeading();
+		if (heading == null) {
 			return (selectedAngle % 360);
 		}
-		return ((selectedAngle + originPos.getTrueHeading()) % 360);
+		return ((selectedAngle + heading) % 360);
 //		double dev = MagneticVariation.getInstance().getVariation(originPos);
 //		return selectedAngle+dev;
+	}
+
+	/**
+	 * The heading correction of the buoy this detection was made on, which
+	 * turns a magnetic DIFAR angle into a true bearing.
+	 * <p>
+	 * This normally comes with the origin position. A streamer saved before the
+	 * array sensor rework has no orientation types, so its heading type falls
+	 * back to the default, and for a static buoy the default takes the heading
+	 * from the fixed position, which has none. The calibrated heading is still
+	 * on the streamer itself, so it is read from there instead. Without this,
+	 * data from older configurations show bearings uncorrected by the compass
+	 * calibration, typically off by around 90 degrees.
+	 * @return heading correction in degrees, or null if the buoy has none.
+	 */
+	public Double getBuoyHeading() {
+		GpsData originPos = getOriginLatLong(false);
+		if (originPos != null && originPos.getTrueHeading() != null) {
+			return originPos.getTrueHeading();
+		}
+		return getStreamerHeading();
+	}
+
+	/**
+	 * @return the heading of the streamer for this detection's channel at the
+	 * time of the detection, or null if it cannot be found.
+	 */
+	private Double getStreamerHeading() {
+		PamArray array = ArrayManager.getArrayManager().getCurrentArray();
+		if (array == null) {
+			return null;
+		}
+		int channel = PamUtils.getSingleChannel(getChannelBitmap());
+		ArrayList<Hydrophone> phones = array.getHydrophoneArray();
+		if (phones == null || channel < 0 || channel >= phones.size()) {
+			return null;
+		}
+		Streamer streamer = array.getStreamerData(phones.get(channel).getStreamerId(), getTimeMilliseconds());
+		if (streamer == null) {
+			return null;
+		}
+		return streamer.getHeading();
 	}
 
 	public String getTrackedGroup() {
@@ -760,7 +815,7 @@ public class DifarDataUnit extends ClipDataUnit {
 		str += "<br>"+FrequencyFormat.formatFrequencyRange(getFrequency(), true);
 		str += String.format("<br>Amplitude: %3.1fdB", getAmplitudeDB());
 		Double ang = getSelectedAngle();
-		Double buoyHead = origin.getTrueHeading();
+		Double buoyHead = getBuoyHeading();
 		if (ang != null) {
 			str += "<br>" + String.format("DIFAR angle %4.1f%s", ang, LatLong.deg);
 			if (buoyHead == null) {

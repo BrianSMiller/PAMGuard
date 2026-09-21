@@ -313,7 +313,13 @@ public class DifarProcess extends PamProcess {
 			sP = difarControl.getDifarParameters().findSpeciesParams(difarDataUnit);
 		}
 		difarDataUnit.setDisplaySampleRate(sP.sampleRate);
-		if (difarDataUnit.triggerName.equals(difarControl.getUnitName())) { // User detection
+		if (difarDataUnit.triggerName == null) {
+			/*
+			 * The trigger name is not stored in the binary file, so it is null
+			 * for a unit loaded in viewer mode. Its frequency limits were set
+			 * when it was first processed, so leave them alone.
+			 */
+		} else if (difarDataUnit.triggerName.equals(difarControl.getUnitName())) { // User detection
 			if (!sP.useMarkedBandsForSpectrogramClips ){
 				double[] frequency = {sP.processFreqMin, sP.processFreqMax};
 				difarDataUnit.setFrequency(frequency);
