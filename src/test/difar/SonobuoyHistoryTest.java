@@ -1,8 +1,11 @@
 package test.difar;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -206,5 +209,66 @@ public class SonobuoyHistoryTest {
 		SonobuoyRecord ch0 = history.getRecordAt(0, utc("2019-02-12 19:32:09.939"));
 		assertNotNull(ch0);
 		assertEquals(94.0, ch0.getHeading(), 1e-9);
+	}
+
+	/** All records come back earliest first, once each, as the buoy manager lists them. */
+	@Test
+	public void allRecordsComeBackInTimeOrder() {
+		List<SonobuoyRecord> doubled = new ArrayList<>(voyageRecords());
+		doubled.addAll(voyageRecords());
+		Collections.reverse(doubled);
+		SonobuoyHistory history = new SonobuoyHistory();
+		history.setRecords(doubled);
+
+		List<SonobuoyRecord> all = history.getAllRecords();
+		assertEquals(voyageRecords().size(), all.size());
+		for (int i = 1; i < all.size(); i++) {
+			assertTrue(all.get(i - 1).getTimeMillis() <= all.get(i).getTimeMillis());
+		}
+		assertEquals("158", all.get(0).getName());
+		assertEquals("159.2", all.get(all.size() - 1).getName());
+	}
+
+	/** Records at the same time on different channels are listed by channel. */
+	@Test
+	public void recordsAtTheSameTimeAreListedByChannel() {
+		long time = utc("2019-02-12 12:00:00.000");
+		SonobuoyHistory history = new SonobuoyHistory();
+		history.setRecords(Arrays.asList(
+				new SonobuoyRecord(2, time, null, "C", -66.0, 150.0, 90.0),
+				new SonobuoyRecord(0, time, null, "A", -66.0, 150.0, 90.0),
+				new SonobuoyRecord(1, time, null, "B", -66.0, 150.0, 90.0)));
+
+		List<SonobuoyRecord> all = history.getAllRecords();
+		assertEquals("A", all.get(0).getName());
+		assertEquals("B", all.get(1).getName());
+		assertEquals("C", all.get(2).getName());
+	}
+
+	/** The list of all records belongs to the history and cannot be changed. */
+	@Test
+	public void allRecordsCannotBeChanged() {
+		List<SonobuoyRecord> all = voyageHistory().getAllRecords();
+		assertThrows(UnsupportedOperationException.class, () -> all.remove(0));
+	}
+
+	/** The short constructor makes a saved record with no UID or depth. */
+	@Test
+	public void theShortConstructorMakesASavedRecord() {
+		SonobuoyRecord record = new SonobuoyRecord(0, 0L, null, "A", -66.0, 150.0, 90.0);
+		assertTrue(record.isSaved());
+		assertNull(record.getUid());
+		assertNull(record.getDepth());
+	}
+
+	/** The full constructor keeps the UID, depth and saved state it is given. */
+	@Test
+	public void theFullConstructorKeepsEverything() {
+		SonobuoyRecord record = new SonobuoyRecord(1, 5L, 9L, "B", -66.0, 150.0, 90.0,
+				-100.0, 3816053L, false);
+		assertEquals(Long.valueOf(3816053L), record.getUid());
+		assertEquals(-100.0, record.getDepth(), 1e-9);
+		assertFalse(record.isSaved());
+		assertEquals(Long.valueOf(9L), record.getEndTimeMillis());
 	}
 }

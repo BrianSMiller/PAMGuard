@@ -18,8 +18,13 @@ public final class SonobuoyRecord {
 	private final Double latitude;
 	private final Double longitude;
 	private final Double heading;
+	private final Double depth;
+	private final Long uid;
+	private final boolean saved;
 
 	/**
+	 * A saved record with no UID or depth. Enough for finding which buoy was
+	 * in force.
 	 * @param channel channel the buoy was on.
 	 * @param timeMillis time the record comes into force.
 	 * @param endTimeMillis time the buoy ended, or null if it has not ended.
@@ -30,6 +35,25 @@ public final class SonobuoyRecord {
 	 */
 	public SonobuoyRecord(int channel, long timeMillis, Long endTimeMillis, String name,
 			Double latitude, Double longitude, Double heading) {
+		this(channel, timeMillis, endTimeMillis, name, latitude, longitude, heading, null, null, true);
+	}
+
+	/**
+	 * @param channel channel the buoy was on.
+	 * @param timeMillis time the record comes into force.
+	 * @param endTimeMillis time the buoy ended, or null if it has not ended.
+	 * @param name buoy name, or null.
+	 * @param latitude buoy latitude in degrees, or null if not known.
+	 * @param longitude buoy longitude in degrees, or null if not known.
+	 * @param heading compass correction in degrees, or null if not calibrated.
+	 * @param depth hydrophone depth in metres, or null if not known.
+	 * @param uid unique identifier of the stored record this came from, or null.
+	 * @param saved true if the record is saved in the database. Records made up
+	 * at startup to stand for the configured array are not.
+	 */
+	public SonobuoyRecord(int channel, long timeMillis, Long endTimeMillis, String name,
+			Double latitude, Double longitude, Double heading,
+			Double depth, Long uid, boolean saved) {
 		this.channel = channel;
 		this.timeMillis = timeMillis;
 		this.endTimeMillis = endTimeMillis;
@@ -37,6 +61,9 @@ public final class SonobuoyRecord {
 		this.latitude = latitude;
 		this.longitude = longitude;
 		this.heading = heading;
+		this.depth = depth;
+		this.uid = uid;
+		this.saved = saved;
 	}
 
 	/**
@@ -86,6 +113,27 @@ public final class SonobuoyRecord {
 	 */
 	public Double getHeading() {
 		return heading;
+	}
+
+	/**
+	 * @return hydrophone depth in metres, or null if not known.
+	 */
+	public Double getDepth() {
+		return depth;
+	}
+
+	/**
+	 * @return unique identifier of the stored record this came from, or null.
+	 */
+	public Long getUid() {
+		return uid;
+	}
+
+	/**
+	 * @return true if the record is saved in the database.
+	 */
+	public boolean isSaved() {
+		return saved;
 	}
 
 	/**

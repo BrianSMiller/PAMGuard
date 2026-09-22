@@ -132,7 +132,8 @@ public class SonobuoyHistorySource extends PamObserverAdapter {
 			longitude = position.getLongitude();
 		}
 		return new SonobuoyRecord(streamer.getStreamerIndex(), unit.getTimeMilliseconds(), endTime,
-				streamer.getStreamerName(), latitude, longitude, streamer.getHeading());
+				streamer.getStreamerName(), latitude, longitude, streamer.getHeading(),
+				streamer.getZ(), unit.getUID(), unit.getDatabaseIndex() > 0);
 	}
 
 	@Override

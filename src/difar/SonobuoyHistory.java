@@ -1,8 +1,11 @@
 package difar;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -76,6 +79,20 @@ public class SonobuoyHistory {
 			return null;
 		}
 		return record;
+	}
+
+	/**
+	 * @return every record held, earliest first, and by channel where two
+	 * records share a time. The list cannot be changed.
+	 */
+	public List<SonobuoyRecord> getAllRecords() {
+		List<SonobuoyRecord> all = new ArrayList<>();
+		for (NavigableMap<Long, SonobuoyRecord> records : recordsByChannel.values()) {
+			all.addAll(records.values());
+		}
+		all.sort(Comparator.comparingLong(SonobuoyRecord::getTimeMillis)
+				.thenComparingInt(SonobuoyRecord::getChannel));
+		return Collections.unmodifiableList(all);
 	}
 
 	/**

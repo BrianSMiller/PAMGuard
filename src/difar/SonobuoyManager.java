@@ -2,8 +2,8 @@ package difar;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.ListIterator;
 
 import javax.swing.JOptionPane;
 import javax.swing.RowSorter;
@@ -438,91 +438,43 @@ public class SonobuoyManager extends PamProcess {
 	
 	/**
 	 * Called after changes have been made to the sonobuoy data: 
-	 * buoy deployed, buoy ended, buoy calibrated, or buoy manually edited 
+	 * buoy deployed, buoy ended, buoy calibrated, or buoy manually edited.
+	 * <p>
+	 * Rows come from the sonobuoy history, one per saved record, so duplicate
+	 * records loaded by the viewer appear once. Records made up at startup to
+	 * stand for the configured array are not saved, and are not shown.
 	 */
 	public synchronized void updateSonobuoyTableData() {
-
-		StreamerDataBlock sdb = buoyDataBlock;
-		StreamerDataUnit sdu = null;
-			ListIterator<StreamerDataUnit> listIterator = sdb.getListIterator(0);
-			int row = 0;
-			while (listIterator.hasNext()) {
-				sdu = listIterator.next();
-				if (sdu.getDatabaseIndex() <= 0){
-					continue;
-				}
-				row++;
+		List<SonobuoyRecord> records = new ArrayList<>();
+		for (SonobuoyRecord record : difarControl.getSonobuoyHistory().getAllRecords()) {
+			if (record.isSaved()) {
+				records.add(record);
 			}
-			int nRows = row;
-			int nCols = columnNames.length;
-			tableData = new Object[nRows][nCols];
-			StreamerDataUnit prevUnit = null;
-			listIterator = sdb.getListIterator(0);
-			row = 0;
-			while (listIterator.hasNext()) {
-				sdu = listIterator.next();
-				if (sdu == prevUnit){
-					break;
-				}
-				if (sdu.getDatabaseIndex() <= 0){
-					continue;
-				}
-				prevUnit = sdu;
-				setTableData(row,sdu);
-
-				row++;
-			}
-			List<RowSorter.SortKey> sortKeys = null;
-			sortKeys = (List<SortKey>) difarControl.getSonobuoyManagerContainer().getSonobuoyTable().getRowSorter().getSortKeys();
-			tableDataModel.setDataVector(tableData, columnNames); 
-			tableDataModel.fireTableDataChanged();
-			difarControl.getSonobuoyManagerContainer().getSonobuoyTable().getRowSorter().setSortKeys(sortKeys);
+		}
+		tableData = new Object[records.size()][columnNames.length];
+		for (int row = 0; row < records.size(); row++) {
+			setTableData(row, records.get(row));
+		}
+		List<RowSorter.SortKey> sortKeys = null;
+		sortKeys = (List<SortKey>) difarControl.getSonobuoyManagerContainer().getSonobuoyTable().getRowSorter().getSortKeys();
+		tableDataModel.setDataVector(tableData, columnNames);
+		tableDataModel.fireTableDataChanged();
+		difarControl.getSonobuoyManagerContainer().getSonobuoyTable().getRowSorter().setSortKeys(sortKeys);
 	}
-	
-	private void setTableData(int row, StreamerDataUnit sdu) {
-		int col = 0;
-		String endTime = null;
-		
-		// Extract DIFAR annotations
-		TimestampAnnotation an = ((TimestampAnnotation) sdu.findDataAnnotation(TimestampAnnotation.class, sonobuoyEndTimeAnnotation.getAnnotationName()));
-		if (an!=null) {
-			endTime = PamCalendar.formatDBDateTime(an.getTimestamp());
+
+	private void setTableData(int row, SonobuoyRecord record) {
+		Long endTime = record.getEndTimeMillis();
+		tableData[row][COLUMN_DATABASEID] = record.getUid();
+		tableData[row][COLUMN_NAME] = record.getName();
+		tableData[row][COLUMN_TIMESTAMP] = PamCalendar.formatDBDateTime(record.getTimeMillis());
+		tableData[row][COLUMN_ENDTIME] = endTime == null ? null : PamCalendar.formatDBDateTime(endTime);
+		tableData[row][COLUMN_CHANNEL] = record.getChannel();
+		if (record.hasPosition()) {
+			tableData[row][COLUMN_LATITUDE] = LatLong.formatLatitude(record.getLatitude());
+			tableData[row][COLUMN_LONGITUDE] = LatLong.formatLongitude(record.getLongitude());
 		}
-		
-		// DIFAR action stored as an Annotation
-//		String actionString = null;
-//		StringAnnotation actionAnnotation = (StringAnnotation) sdu.findDataAnnotation(StringAnnotation.class, sonobuoyActionAnnotation.getAnnotationName());
-//		if (actionAnnotation != null){
-//			actionString = actionAnnotation.getString();
-//		}
-//		
-//		String compassCorrection = null;
-//		StringAnnotation correctionAnnotation = (StringAnnotation) sdu.findDataAnnotation(StringAnnotation.class, calMeanAnnotation.getAnnotationName());
-//		if (correctionAnnotation != null){
-//			compassCorrection = correctionAnnotation.getString();
-//		}
-//
-//		String calStdDev = null;
-//		StringAnnotation stdDevAnnotation = (StringAnnotation) sdu.findDataAnnotation(StringAnnotation.class, calStdDevAnnotation.getAnnotationName());
-//		if (stdDevAnnotation != null){
-//			calStdDev = stdDevAnnotation.getString();
-//		}
-		
-		tableData[row][COLUMN_DATABASEID] = sdu.getUID();
-		tableData[row][COLUMN_NAME] = sdu.getStreamerData().getStreamerName();
-		tableData[row][COLUMN_TIMESTAMP] = PamCalendar.formatDBDateTime(sdu.getTimeMilliseconds());
-		tableData[row][COLUMN_ENDTIME] =  endTime;
-		tableData[row][COLUMN_CHANNEL] = PamUtils.getSingleChannel(sdu.getChannelBitmap());
-		if (sdu.getGpsData()!=null){
-			tableData[row][COLUMN_LATITUDE] = LatLong.formatLatitude(sdu.getGpsData().getLatitude()); 
-			tableData[row][COLUMN_LONGITUDE] = LatLong.formatLongitude(sdu.getGpsData().getLongitude());
-		}
-		tableData[row][COLUMN_DEPTH] = sdu.getStreamerData().getZ();
-		tableData[row][COLUMN_HEADING] = sdu.getStreamerData().getHeading();
-//		tableData[row][COLUMN_ACTION] = null;//actionString;
-//		tableData[row][COLUMN_COMPASSCORRECTION] = correctionAnnotation;
-//		tableData[row][COLUMN_CALSTDDEV] = calStdDev; 
-		
+		tableData[row][COLUMN_DEPTH] = record.getDepth();
+		tableData[row][COLUMN_HEADING] = record.getHeading();
 	}
 
 	class SonobuoyTableModel extends DefaultTableModel {
