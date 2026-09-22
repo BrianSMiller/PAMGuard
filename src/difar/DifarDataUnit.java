@@ -2,22 +2,19 @@ package difar;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
-import java.util.ArrayList;
 
 import Filters.Filter;
 import Filters.FilterBand;
 import Filters.FilterMethod;
 import Filters.FilterParams;
 import Filters.FilterType;
-import Array.ArrayManager;
-import Array.Hydrophone;
-import Array.PamArray;
-import Array.Streamer;
 import GPS.GpsData;
+import PamController.PamControlledUnit;
 import PamUtils.FrequencyFormat;
 import PamUtils.LatLong;
 import PamUtils.PamCalendar;
 import PamUtils.PamUtils;
+import PamguardMVC.PamDataBlock;
 import PamguardMVC.PamDataUnit;
 import clipgenerator.ClipDataUnit;
 import fftManager.Complex;
@@ -435,42 +432,56 @@ public class DifarDataUnit extends ClipDataUnit {
 	 * The heading correction of the buoy this detection was made on, which
 	 * turns a magnetic DIFAR angle into a true bearing.
 	 * <p>
-	 * This normally comes with the origin position. A streamer saved before the
-	 * array sensor rework has no orientation types, so its heading type falls
-	 * back to the default, and for a static buoy the default takes the heading
-	 * from the fixed position, which has none. The calibrated heading is still
-	 * on the streamer itself, so it is read from there instead. Without this,
-	 * data from older configurations show bearings uncorrected by the compass
-	 * calibration, typically off by around 90 degrees.
-	 * @return heading correction in degrees, or null if the buoy has none.
+	 * It comes from the buoy record in force on this channel at the time of the
+	 * detection. If there are no buoy records at all, it comes from the core
+	 * array, as before.
+	 * @return heading correction in degrees, or null if the buoy has none, or
+	 * if no buoy was in force.
 	 */
 	public Double getBuoyHeading() {
-		GpsData originPos = getOriginLatLong(false);
-		if (originPos != null && originPos.getTrueHeading() != null) {
-			return originPos.getTrueHeading();
+		SonobuoyHistory history = getSonobuoyHistory();
+		if (history != null && history.getRecordCount() > 0) {
+			SonobuoyRecord buoy = history.getRecordAt(getBuoyChannel(), getTimeMilliseconds());
+			return buoy == null ? null : buoy.getHeading();
 		}
-		return getStreamerHeading();
+		GpsData originPos = super.getOriginLatLong(false);
+		return originPos == null ? null : originPos.getTrueHeading();
 	}
 
 	/**
-	 * @return the heading of the streamer for this detection's channel at the
-	 * time of the detection, or null if it cannot be found.
+	 * @return the buoy record in force on this channel at the time of the
+	 * detection, or null if there is none or no buoy records are available.
 	 */
-	private Double getStreamerHeading() {
-		PamArray array = ArrayManager.getArrayManager().getCurrentArray();
-		if (array == null) {
+	public SonobuoyRecord getBuoyRecord() {
+		SonobuoyHistory history = getSonobuoyHistory();
+		if (history == null) {
 			return null;
 		}
-		int channel = PamUtils.getSingleChannel(getChannelBitmap());
-		ArrayList<Hydrophone> phones = array.getHydrophoneArray();
-		if (phones == null || channel < 0 || channel >= phones.size()) {
+		return history.getRecordAt(getBuoyChannel(), getTimeMilliseconds());
+	}
+
+	/**
+	 * @return the channel of this detection, which DIFAR uses as the buoy's
+	 * streamer index.
+	 */
+	private int getBuoyChannel() {
+		return PamUtils.getSingleChannel(getChannelBitmap());
+	}
+
+	/**
+	 * @return the sonobuoy history of the DIFAR module this detection belongs
+	 * to, or null if it is not yet in a DIFAR data block.
+	 */
+	private SonobuoyHistory getSonobuoyHistory() {
+		PamDataBlock parentBlock = getParentDataBlock();
+		if (parentBlock == null || parentBlock.getParentProcess() == null) {
 			return null;
 		}
-		Streamer streamer = array.getStreamerData(phones.get(channel).getStreamerId(), getTimeMilliseconds());
-		if (streamer == null) {
-			return null;
+		PamControlledUnit unit = parentBlock.getParentProcess().getPamControlledUnit();
+		if (unit instanceof DifarControl) {
+			return ((DifarControl) unit).getSonobuoyHistory();
 		}
-		return streamer.getHeading();
+		return null;
 	}
 
 	public String getTrackedGroup() {
@@ -995,13 +1006,31 @@ public class DifarDataUnit extends ClipDataUnit {
 		}
 	}
 
-	/* (non-Javadoc)
-	 * @see PamguardMVC.PamDataUnit#getOriginLatLong(boolean)
+	/**
+	 * The position of the buoy this detection was made on, with its heading
+	 * correction as the true heading.
+	 * <p>
+	 * It comes from the buoy record in force on this channel at the time of the
+	 * detection, not from the core array, whose time lookups can return a
+	 * later record. If there are no buoy records at all, it comes from the core
+	 * array, as before.
+	 * @param recalculate passed to the core array when it is used.
+	 * @return the buoy position, or null if no buoy with a known position was
+	 * in force at the time.
 	 */
 	@Override
 	public GpsData getOriginLatLong(boolean recalculate) {
-		// TODO Auto-generated method stub
-		return super.getOriginLatLong(recalculate);
+		SonobuoyHistory history = getSonobuoyHistory();
+		if (history == null || history.getRecordCount() == 0) {
+			return super.getOriginLatLong(recalculate);
+		}
+		SonobuoyRecord buoy = history.getRecordAt(getBuoyChannel(), getTimeMilliseconds());
+		if (buoy == null || !buoy.hasPosition()) {
+			return null;
+		}
+		GpsData origin = new GpsData(buoy.getLatitude(), buoy.getLongitude(), 0, buoy.getTimeMillis());
+		origin.setTrueHeading(buoy.getHeading());
+		return origin;
 	}
 
 	public void saveGroup() {

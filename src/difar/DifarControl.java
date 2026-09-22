@@ -120,6 +120,9 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 	private OfflineTaskGroup offlineTaskGroup;
 	
 	public SonobuoyManager sonobuoyManager;
+
+	/** Which buoy record was in force on each channel at any time. */
+	private SonobuoyHistorySource sonobuoyHistorySource;
 	
 	private static PamWarning warningMessage = new PamWarning("Difar", "", 2);
 
@@ -132,6 +135,8 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 		addPamProcess(difarProcess = new DifarProcess(this));
 		addPamProcess(setTrackedGroupProcess(new TrackedGroupProcess(this, difarProcess.getProcessedDifarData(), "Difar Tracked Groups")));
 		addPamProcess(sonobuoyManager = new SonobuoyManager(this));
+		sonobuoyHistorySource = new SonobuoyHistorySource(
+				sonobuoyManager.sonobuoyEndTimeAnnotation.getAnnotationName());
 		// make the displays here
 		displayUnits.add(difarUnitControlPanel = new DIFARUnitControlPanel(this));
 		displayUnits.add(difarGram = new DIFARGram(this));
@@ -525,11 +530,21 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 		super.notifyModelChanged(changeType);
 		switch (changeType) {
 		case PamControllerInterface.INITIALIZATION_COMPLETE:
+			sonobuoyHistorySource.connect();
 			difarProcess.setupProcess();
 			break;
 		case PamControllerInterface.OFFLINE_DATA_LOADED:
+			sonobuoyHistorySource.markStale();
 			sonobuoyManager.updateSonobuoyTableData();
 		}
+	}
+
+	/**
+	 * @return which buoy record was in force on each channel at any time, up to
+	 * date with the streamer records.
+	 */
+	public SonobuoyHistory getSonobuoyHistory() {
+		return sonobuoyHistorySource.getHistory();
 	}
 
 	public DIFARGram getDifarGram() {
