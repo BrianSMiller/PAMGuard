@@ -1335,13 +1335,7 @@ public class DifarProcess extends PamProcess {
 		List<DifarMatchSelector.Match> candidates = selector.selectAll(difarDataUnit,
 				new ArrayList<List<PamDataUnit>>(candidatesByBuoy));
 		matchLog.put(difarDataUnit, candidates);
-		DifarMatchSelector.Match match = null;
-		for (DifarMatchSelector.Match candidate : candidates) {
-			if (candidate.isAccepted()) {
-				match = candidate;
-				break;
-			}
-		}
+		DifarMatchSelector.Match match = DifarMatchSelector.chooseMatch(candidates);
 
 		DIFARCrossingInfo crossInfo = null;
 		if (match != null) {
@@ -1442,12 +1436,17 @@ public class DifarProcess extends PamProcess {
 				}
 				thatStart = otherUnit.getTimeMilliseconds();
 				thatEnd = thatStart + (long) (otherUnit.getDurationInSeconds() * 1000.);
-				long sepMillis = getTravelTimeMillis(thisOrigin, otherUnit, speedOfSound) + markingSlackMillis;
-				long tOverlap = getTimeOverlap(sepMillis, thisStart, thisEnd, thatStart, thatEnd);
-				double fOverlap = getFreqOverlap(thisFreq, otherUnit.getFrequency());
-				if (tOverlap <= 0 || fOverlap <= 0) {
+				long travelMillis = getTravelTimeMillis(thisOrigin, otherUnit, speedOfSound);
+				if (!DifarMatchSelector.couldBeSameCall(thisStart, thatStart, travelMillis, markingSlackMillis)) {
 					continue;
 				}
+				double fOverlap = getFreqOverlap(thisFreq, otherUnit.getFrequency());
+				if (fOverlap <= 0) {
+					continue;
+				}
+				// Overlap of the clips is used only to rank candidates within the cap.
+				long tOverlap = Math.max(0, getTimeOverlap(travelMillis + markingSlackMillis,
+						thisStart, thisEnd, thatStart, thatEnd));
 				if (otherUnit.getLocalisation() == null) {
 					continue;
 				}

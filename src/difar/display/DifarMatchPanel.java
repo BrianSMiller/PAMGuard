@@ -27,8 +27,10 @@ import difar.DifarMatchSelector;
  * one being looked at, and what happened to each of them.
  * <p>
  * Every combination the matching tried is listed, best first. The one that was
- * used is highlighted. The rest carry the reason they were not used, which is
- * usually that the arrival times do not fit where the bearings cross.
+ * used is highlighted. Others that fit, such as the pairs inside a triplet
+ * that was used, are marked as fitting but not used. The rest carry the reason
+ * they were not used, which is usually that the arrival times do not fit where
+ * the bearings cross.
  * <p>
  * The table shows the matching as it would happen now, with the settings now in
  * force. It is not a record of what happened when the data were collected.
@@ -113,9 +115,17 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 
 		private List<DifarMatchSelector.Match> matches;
 
+		/** The match that was used, or null. Only this one is marked used. */
+		private DifarMatchSelector.Match used;
+
 		void setMatches(List<DifarMatchSelector.Match> matches) {
 			this.matches = matches;
+			this.used = DifarMatchSelector.chooseMatch(matches);
 			fireTableDataChanged();
+		}
+
+		boolean isUsed(DifarMatchSelector.Match match) {
+			return match != null && match == used;
 		}
 
 		DifarMatchSelector.Match getMatch(int row) {
@@ -158,7 +168,10 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 			case 4:
 				return format(match.getChi2PerDegreeOfFreedom(), 2);
 			case 5:
-				return match.isAccepted() ? "used" : match.getRejectReason();
+				if (isUsed(match)) {
+					return "used";
+				}
+				return match.isAccepted() ? "fits, not used" : match.getRejectReason();
 			}
 			return null;
 		}
@@ -200,7 +213,7 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 			Component component = super.getTableCellRendererComponent(table, value,
 					isSelected, hasFocus, row, column);
 			DifarMatchSelector.Match match = tableModel.getMatch(table.convertRowIndexToModel(row));
-			boolean used = match != null && match.isAccepted();
+			boolean used = tableModel.isUsed(match);
 			component.setFont(component.getFont().deriveFont(used ? Font.BOLD : Font.PLAIN));
 			return component;
 		}

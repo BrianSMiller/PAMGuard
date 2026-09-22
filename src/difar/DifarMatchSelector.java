@@ -131,13 +131,46 @@ public class DifarMatchSelector {
 	 * @return the best match, or null if no group passed the limits.
 	 */
 	public Match select(PamDataUnit seed, List<List<PamDataUnit>> candidatesByBuoy) {
-		List<Match> all = selectAll(seed, candidatesByBuoy);
-		for (Match match : all) {
+		return chooseMatch(selectAll(seed, candidatesByBuoy));
+	}
+
+	/**
+	 * The match to use from a ranked list: the first one accepted. Everything
+	 * that picks or shows the chosen match goes through here, so they agree.
+	 * @param ranked matches as ranked by selectAll(), or null.
+	 * @return the match to use, or null if none was accepted.
+	 */
+	public static Match chooseMatch(List<Match> ranked) {
+		if (ranked == null) {
+			return null;
+		}
+		for (Match match : ranked) {
 			if (match.isAccepted()) {
 				return match;
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Whether a detection on another buoy could be the same call, judged on
+	 * timing alone.
+	 * <p>
+	 * A sound cannot arrive at two buoys further apart in time than it takes to
+	 * travel between them. Clips are also marked by hand, so each start time
+	 * can be out by up to the slack. Uses clip start times, as the localisation
+	 * does. A detection outside this window would always fail the timing
+	 * residual, so leaving it out changes no result, but it stops impossible
+	 * candidates crowding out real ones.
+	 * @param seedMillis start time of the detection being matched.
+	 * @param otherMillis start time of the detection on the other buoy.
+	 * @param travelMillis travel time between the two buoys, in milliseconds.
+	 * @param slackMillis allowance for marking error, in milliseconds.
+	 * @return true if the other detection is close enough in time.
+	 */
+	public static boolean couldBeSameCall(long seedMillis, long otherMillis,
+			long travelMillis, long slackMillis) {
+		return Math.abs(otherMillis - seedMillis) <= travelMillis + slackMillis;
 	}
 
 	/**
