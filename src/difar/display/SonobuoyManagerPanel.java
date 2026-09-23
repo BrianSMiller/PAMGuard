@@ -2,6 +2,7 @@ package difar.display;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Font;
 import java.awt.Point;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -89,6 +90,7 @@ public class SonobuoyManagerPanel extends PamPanel {
 		           int rendererWidth = component.getPreferredSize().width;
 		           javax.swing.table.TableColumn tableColumn = getColumnModel().getColumn(column);
 		           tableColumn.setPreferredWidth(Math.max(rendererWidth + getIntercellSpacing().width, tableColumn.getPreferredWidth()));
+		           styleRow(component, convertRowIndexToModel(row), isRowSelected(row));
 		           return component;
 		        }
 		    };
@@ -184,6 +186,45 @@ public class SonobuoyManagerPanel extends PamPanel {
 		
 	}
 	
+	/**
+	 * Show which buoy a row belongs to, and which buoy is in force.
+	 * <p>
+	 * Rows carry a faded version of their channel's colour, the same colours
+	 * used for channels elsewhere. The record in force on each channel is shown
+	 * in bold. A selected row keeps the selection colours, so the selection is
+	 * never hidden.
+	 * @param component the cell being drawn.
+	 * @param modelRow the row in the table model.
+	 * @param selected true if the row is selected.
+	 */
+	private void styleRow(Component component, int modelRow, boolean selected) {
+		component.setFont(component.getFont().deriveFont(
+				buoyManager.isRowInForce(modelRow) ? Font.BOLD : Font.PLAIN));
+		if (selected) {
+			return;
+		}
+		int channel = buoyManager.getRowChannel(modelRow);
+		if (channel < 0) {
+			return;
+		}
+		component.setBackground(fadeToBackground(PamColors.getInstance().getChannelColor(channel),
+				sonobuoyTable.getBackground()));
+	}
+
+	/**
+	 * @param colour a channel colour.
+	 * @param background the table background.
+	 * @return the colour mixed well into the background, so text stays readable
+	 * in either a light or a dark colour scheme.
+	 */
+	private static java.awt.Color fadeToBackground(java.awt.Color colour, java.awt.Color background) {
+		double weight = 0.12;
+		return new java.awt.Color(
+				(int) (colour.getRed() * weight + background.getRed() * (1 - weight)),
+				(int) (colour.getGreen() * weight + background.getGreen() * (1 - weight)),
+				(int) (colour.getBlue() * weight + background.getBlue() * (1 - weight)));
+	}
+
 	public void resizeColumnWidth(JTable table) {
 	    final TableColumnModel columnModel = table.getColumnModel();
 	    for (int column = 0; column < table.getColumnCount(); column++) {

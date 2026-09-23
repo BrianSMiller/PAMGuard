@@ -536,6 +536,9 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 		case PamControllerInterface.OFFLINE_DATA_LOADED:
 			sonobuoyHistorySource.markStale();
 			sonobuoyManager.updateSonobuoyTableData();
+			break;
+		case PamControllerInterface.NEW_SCROLL_TIME:
+			sonobuoyManager.scrollTimeChanged();
 		}
 	}
 
