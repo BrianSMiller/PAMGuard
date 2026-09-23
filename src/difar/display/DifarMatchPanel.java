@@ -3,10 +3,11 @@ package difar.display;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Font;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import javax.swing.BorderFactory;
-import javax.swing.JLabel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
@@ -48,7 +49,7 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 
 	private final JTable table = new JTable(tableModel);
 
-	private final JLabel header = new JLabel(" ");
+	private final DifarMatchClipStrip clipStrip;
 
 	/** The detection whose candidates are shown, or null. */
 	private DifarDataUnit currentUnit;
@@ -59,8 +60,11 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 		setLayout(new BorderLayout());
 		setBorder(BorderFactory.createTitledBorder("Triangulation match selector"));
 
-		header.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-		add(BorderLayout.NORTH, header);
+		clipStrip = new DifarMatchClipStrip(difarControl);
+		JScrollPane stripScroller = new JScrollPane(clipStrip,
+				JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+		stripScroller.setBorder(BorderFactory.createEmptyBorder());
+		add(BorderLayout.NORTH, stripScroller);
 
 		table.setDefaultRenderer(Object.class, new MatchCellRenderer());
 		table.setFillsViewportHeight(true);
@@ -94,6 +98,16 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 		}
 		difarControl.getDifarProcess().applyMatch(currentUnit, match);
 		tableModel.setUsed(match);
+		updateClipStrip();
+	}
+
+	/**
+	 * Show the clips of the match in use, then the other candidates.
+	 */
+	private void updateClipStrip() {
+		List<PamDataUnit> matched = tableModel.used == null
+				? Collections.emptyList() : tableModel.used.getUnits();
+		clipStrip.show(currentUnit, matched, tableModel.getCandidateUnits());
 	}
 
 	/**
@@ -101,7 +115,8 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 	 * whatever is left.
 	 */
 	private void sizeColumns() {
-		for (int column = 0; column < table.getColumnCount() - 1; column++) {
+		int lastColumn = table.getColumnCount() - 1;
+		for (int column = 0; column <= lastColumn; column++) {
 			TableColumn tableColumn = table.getColumnModel().getColumn(column);
 			int width = table.getTableHeader().getDefaultRenderer()
 					.getTableCellRendererComponent(table, tableColumn.getHeaderValue(),
@@ -110,8 +125,12 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 				Component cell = table.prepareRenderer(table.getCellRenderer(row, column), row, column);
 				width = Math.max(width, cell.getPreferredSize().width);
 			}
-			tableColumn.setPreferredWidth(width + 10);
+			width += 10;
+			tableColumn.setMinWidth(Math.min(width, 60));
+			tableColumn.setPreferredWidth(width);
+			tableColumn.setWidth(width);
 		}
+		table.doLayout();
 	}
 
 	@Override
@@ -146,16 +165,9 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 				? null : difarControl.getDifarProcess().getMatchLog().get(unit);
 		currentUnit = unit instanceof DifarDataUnit ? (DifarDataUnit) unit : null;
 		SwingUtilities.invokeLater(() -> {
-			if (unit == null) {
-				header.setText(" ");
-			} else {
-				header.setText(String.format("%s on channel %d, %d candidate groups",
-						PamCalendar.formatTime(unit.getTimeMilliseconds(), true),
-						PamUtils.getSingleChannel(unit.getChannelBitmap()),
-						matches == null ? 0 : matches.size()));
-			}
 			tableModel.setMatches(matches);
 			sizeColumns();
+			updateClipStrip();
 		});
 	}
 
@@ -186,6 +198,21 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 
 		boolean isUsed(DifarMatchSelector.Match match) {
 			return match != null && match == used;
+		}
+
+		/** @return every candidate detection, over all groups, once each. */
+		List<PamDataUnit> getCandidateUnits() {
+			List<PamDataUnit> units = new ArrayList<>();
+			if (matches != null) {
+				for (DifarMatchSelector.Match match : matches) {
+					for (PamDataUnit unit : match.getUnits()) {
+						if (!units.contains(unit)) {
+							units.add(unit);
+						}
+					}
+				}
+			}
+			return units;
 		}
 
 		DifarMatchSelector.Match getMatch(int row) {
