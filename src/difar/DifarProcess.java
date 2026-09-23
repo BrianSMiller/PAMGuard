@@ -59,12 +59,6 @@ import warnings.WarningSystem;
 
 public class DifarProcess extends PamProcess {
 
-	/**
-	 * Most candidate detections to consider on any one buoy when matching. Only
-	 * likely to bite for an automatic detector on a noisy chorus.
-	 */
-	private static final int MAX_CANDIDATES_PER_BUOY = 10;
-
 	/** Candidate matches for recent detections, for the matching display. */
 	private DifarMatchLog matchLog = new DifarMatchLog();
 
@@ -1327,7 +1321,7 @@ public class DifarProcess extends PamProcess {
 			if (aChan == thisChan) {
 				continue;
 			}
-			candidatesByBuoy.add(getMatchingUnits(difarDataUnit, aChan, MAX_CANDIDATES_PER_BUOY));
+			candidatesByBuoy.add(getMatchingUnits(difarDataUnit, aChan, params.maxCandidatesPerBuoy));
 		}
 
 		DifarMatchSelector selector = new DifarMatchSelector(this,
