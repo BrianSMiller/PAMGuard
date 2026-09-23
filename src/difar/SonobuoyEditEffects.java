@@ -123,11 +123,10 @@ public class SonobuoyEditEffects {
 	 * What the user is told before the change is made.
 	 * @param viewer true in viewer mode, where the change can be carried
 	 * through to the saved data.
-	 * @param recompute true if triangulations will be worked out again, false
-	 * if they will only be cleared.
-	 * @return the message for the dialog.
+	 * @return the message for the dialog. What happens to the triangulations is
+	 * chosen in the dialog itself.
 	 */
-	public String getMessage(boolean viewer, boolean recompute) {
+	public String getMessage(boolean viewer) {
 		StringBuilder message = new StringBuilder();
 		message.append(String.format("<html>Buoy %s on channel %d, deployed %s.<p><p>",
 				record.getName(), record.getChannel(), PamCalendar.formatDateTime(startTime)));
@@ -141,18 +140,14 @@ public class SonobuoyEditEffects {
 		message.append(String.format("%d bearings will be updated.<p>", bearings));
 		if (triangulations == 0) {
 			message.append("No saved triangulations are affected.");
-		} else if (!viewer) {
-			message.append(String.format(recompute
-					? "%d triangulations still in memory will be worked out again.<p><p>"
-					: "%d triangulations still in memory will be cleared.<p><p>", triangulations));
-			message.append("Detections already written to file keep their old triangulation until "
-					+ "the data are reprocessed in Viewer mode, from DIFAR offline tasks.");
-		} else if (recompute) {
-			message.append(String.format("%d triangulations will be cleared and worked out again.",
-					triangulations));
 		} else {
-			message.append(String.format("%d triangulations will be cleared. Work them out again "
-					+ "from DIFAR offline tasks when you are ready.", triangulations));
+			message.append(String.format("%d saved triangulations no longer describe this buoy.",
+					triangulations));
+			if (!viewer) {
+				message.append("<p><p>Only those still in memory can be changed. Detections "
+						+ "already written to file keep their old triangulation until the data "
+						+ "are reprocessed in Viewer mode, from DIFAR offline tasks.");
+			}
 		}
 		if (countsAreOfLoadedData) {
 			message.append("<p><p>These counts are of the data loaded now. Any others in the same "

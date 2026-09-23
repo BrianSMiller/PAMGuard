@@ -7,7 +7,13 @@ import java.util.Arrays;
 import java.util.List;
 import java.awt.Point;
 
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.ButtonGroup;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JRadioButton;
 import javax.swing.JTable;
 import javax.swing.JViewport;
 import javax.swing.RowSorter;
@@ -806,23 +812,55 @@ public class SonobuoyManager extends PamProcess {
 		return true;
 	}
 
+	/** What to do with the triangulations after a buoy changes. */
+	private enum ChangeChoice { CANCEL, RECOMPUTE, CLEAR }
+
+	/** What the user chose in the last confirmation, for the change now in hand. */
+	private ChangeChoice changeChoice = ChangeChoice.CANCEL;
+
 	/**
 	 * Ask before changing a buoy in a way that leaves saved triangulations
-	 * describing a calibration that no longer exists. Nothing is asked when
-	 * nothing downstream is affected.
+	 * describing a calibration that no longer exists. The user is told what is
+	 * affected, and chooses whether the triangulations are worked out again or
+	 * cleared. Nothing is asked when nothing downstream is affected.
 	 * @param record the buoy record about to change.
 	 * @return true to go ahead.
 	 */
 	private boolean confirmChange(StreamerDataUnit record) {
 		SonobuoyEditEffects effects = getEditEffects(record);
 		if (effects == null || !effects.isAnythingAffected()) {
+			changeChoice = ChangeChoice.RECOMPUTE;
 			return true;
 		}
-		String message = effects.getMessage(isViewer(),
-				difarControl.getDifarParameters().autoSaveDResult);
-		return JOptionPane.showConfirmDialog(difarControl.getGuiFrame(), message,
-				"Change sonobuoy", JOptionPane.OK_CANCEL_OPTION,
-				JOptionPane.WARNING_MESSAGE) == JOptionPane.OK_OPTION;
+		JRadioButton recompute = new JRadioButton("Work the triangulations out again now");
+		JRadioButton clear = new JRadioButton("Clear them, and work them out later");
+		ButtonGroup group = new ButtonGroup();
+		group.add(recompute);
+		group.add(clear);
+		if (difarControl.getDifarParameters().autoSaveDResult) {
+			recompute.setSelected(true);
+		} else {
+			clear.setSelected(true);
+		}
+		boolean choose = effects.getTriangulations() > 0;
+		recompute.setVisible(choose);
+		clear.setVisible(choose);
+
+		JPanel panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+		panel.add(new JLabel(effects.getMessage(isViewer())));
+		panel.add(Box.createVerticalStrut(8));
+		panel.add(recompute);
+		panel.add(clear);
+
+		int answer = JOptionPane.showConfirmDialog(difarControl.getGuiFrame(), panel,
+				"Change sonobuoy", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+		if (answer != JOptionPane.OK_OPTION) {
+			changeChoice = ChangeChoice.CANCEL;
+			return false;
+		}
+		changeChoice = recompute.isSelected() ? ChangeChoice.RECOMPUTE : ChangeChoice.CLEAR;
+		return true;
 	}
 
 	/**
@@ -836,7 +874,7 @@ public class SonobuoyManager extends PamProcess {
 		if (effects == null || effects.getTriangulations() == 0) {
 			return;
 		}
-		boolean recompute = difarControl.getDifarParameters().autoSaveDResult;
+		boolean recompute = changeChoice == ChangeChoice.RECOMPUTE;
 		if (isViewer()) {
 			difarControl.runCrossingTasks(effects.getStartTime(), effects.getEndTimeOrLatest(), recompute);
 		}
