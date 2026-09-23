@@ -1337,6 +1337,20 @@ public class DifarProcess extends PamProcess {
 		matchLog.put(difarDataUnit, candidates);
 		DifarMatchSelector.Match match = DifarMatchSelector.chooseMatch(candidates);
 
+		return applyMatch(difarDataUnit, match);
+	}
+
+	/**
+	 * Make a match the crossing for a detection, ready to be saved.
+	 * <p>
+	 * Used for the match chosen automatically, and again when the user picks a
+	 * different one in the match selector, so both go the same way. A null
+	 * match leaves the detection with no crossing.
+	 * @param difarDataUnit the detection being matched.
+	 * @param match the match to use, or null for none.
+	 * @return the crossing, or null if there is none.
+	 */
+	public DIFARCrossingInfo applyMatch(DifarDataUnit difarDataUnit, DifarMatchSelector.Match match) {
 		DIFARCrossingInfo crossInfo = null;
 		if (match != null) {
 			LatLong ll = match.getResult().getLatLong();

@@ -9,9 +9,11 @@ import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableColumn;
 
 import PamUtils.PamCalendar;
 import PamUtils.PamUtils;
@@ -20,6 +22,7 @@ import PamView.panel.PamPanel;
 import PamguardMVC.PamDataUnit;
 import difar.DIFARMessage;
 import difar.DifarControl;
+import difar.DifarDataUnit;
 import difar.DifarMatchSelector;
 
 /**
@@ -47,11 +50,14 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 
 	private final JLabel header = new JLabel(" ");
 
+	/** The detection whose candidates are shown, or null. */
+	private DifarDataUnit currentUnit;
+
 	public DifarMatchPanel(DifarControl difarControl) {
 		super(PamColor.BORDER);
 		this.difarControl = difarControl;
 		setLayout(new BorderLayout());
-		setBorder(BorderFactory.createTitledBorder("Match candidates"));
+		setBorder(BorderFactory.createTitledBorder("Triangulation match selector"));
 
 		header.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
 		add(BorderLayout.NORTH, header);
@@ -59,7 +65,53 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 		table.setDefaultRenderer(Object.class, new MatchCellRenderer());
 		table.setFillsViewportHeight(true);
 		table.getTableHeader().setReorderingAllowed(false);
+		table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
+		table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		table.getSelectionModel().addListSelectionListener(e -> {
+			if (!e.getValueIsAdjusting()) {
+				chooseSelectedMatch();
+			}
+		});
 		add(BorderLayout.CENTER, new JScrollPane(table));
+	}
+
+	/**
+	 * Use the match in the selected row for this detection, in place of the one
+	 * chosen automatically. Saving the clip then saves this match. Choosing a
+	 * rejected group is allowed: the reason it was rejected stays on show.
+	 */
+	private void chooseSelectedMatch() {
+		if (currentUnit == null) {
+			return;
+		}
+		int row = table.getSelectedRow();
+		if (row < 0) {
+			return;
+		}
+		DifarMatchSelector.Match match = tableModel.getMatch(table.convertRowIndexToModel(row));
+		if (match == null) {
+			return;
+		}
+		difarControl.getDifarProcess().applyMatch(currentUnit, match);
+		tableModel.setUsed(match);
+	}
+
+	/**
+	 * Size each column to its contents, leaving the status column to take up
+	 * whatever is left.
+	 */
+	private void sizeColumns() {
+		for (int column = 0; column < table.getColumnCount() - 1; column++) {
+			TableColumn tableColumn = table.getColumnModel().getColumn(column);
+			int width = table.getTableHeader().getDefaultRenderer()
+					.getTableCellRendererComponent(table, tableColumn.getHeaderValue(),
+							false, false, 0, column).getPreferredSize().width;
+			for (int row = 0; row < table.getRowCount(); row++) {
+				Component cell = table.prepareRenderer(table.getCellRenderer(row, column), row, column);
+				width = Math.max(width, cell.getPreferredSize().width);
+			}
+			tableColumn.setPreferredWidth(width + 10);
+		}
 	}
 
 	@Override
@@ -92,6 +144,7 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 	public void showUnit(PamDataUnit unit) {
 		List<DifarMatchSelector.Match> matches = unit == null
 				? null : difarControl.getDifarProcess().getMatchLog().get(unit);
+		currentUnit = unit instanceof DifarDataUnit ? (DifarDataUnit) unit : null;
 		SwingUtilities.invokeLater(() -> {
 			if (unit == null) {
 				header.setText(" ");
@@ -102,6 +155,7 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 						matches == null ? 0 : matches.size()));
 			}
 			tableModel.setMatches(matches);
+			sizeColumns();
 		});
 	}
 
@@ -110,7 +164,7 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 
 		private static final long serialVersionUID = 1L;
 
-		private final String[] columns = {"Buoys", "Other detections", "Bearing (deg)",
+		private final String[] columns = {"Buoys", "Match candidates", "Bearing (deg)",
 				"Timing (s)", "Chi2/dof", "Status"};
 
 		private List<DifarMatchSelector.Match> matches;
@@ -121,6 +175,12 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 		void setMatches(List<DifarMatchSelector.Match> matches) {
 			this.matches = matches;
 			this.used = DifarMatchSelector.chooseMatch(matches);
+			fireTableDataChanged();
+		}
+
+		/** Mark a match as the one in use, after the user has picked it. */
+		void setUsed(DifarMatchSelector.Match used) {
+			this.used = used;
 			fireTableDataChanged();
 		}
 
