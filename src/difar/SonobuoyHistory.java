@@ -82,6 +82,29 @@ public class SonobuoyHistory {
 	}
 
 	/**
+	 * When a record stops being the one in force on its channel.
+	 * <p>
+	 * A record holds until the next record on its channel takes over, or until
+	 * its buoy ends, whichever comes first.
+	 * @param record a record, which need not be one of those held.
+	 * @return the time it stops being in force, or null if nothing supersedes
+	 * it and it has no end time.
+	 */
+	public Long getInForceUntil(SonobuoyRecord record) {
+		Long endTime = record.getEndTimeMillis();
+		NavigableMap<Long, SonobuoyRecord> records = recordsByChannel.get(record.getChannel());
+		Map.Entry<Long, SonobuoyRecord> next = records == null ? null
+				: records.higherEntry(record.getTimeMillis());
+		if (next == null) {
+			return endTime;
+		}
+		if (endTime != null && endTime < next.getKey()) {
+			return endTime;
+		}
+		return next.getKey();
+	}
+
+	/**
 	 * @param channel the channel.
 	 * @return the last record on a channel, whether or not its buoy has ended,
 	 * or null if the channel has none.

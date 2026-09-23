@@ -294,4 +294,39 @@ public class SonobuoyHistoryTest {
 		assertNull(history.getRecordAt(0, utc("2019-02-12 15:00:00.000")));
 		assertEquals("A", history.getLastRecord(0).getName());
 	}
+
+	/** A record holds until the next one on its channel takes over. */
+	@Test
+	public void aRecordHoldsUntilTheNextOnItsChannel() {
+		SonobuoyHistory history = voyageHistory();
+		SonobuoyRecord ch1At1818 = history.getAllRecords().get(2);
+		assertEquals("159", ch1At1818.getName());
+		assertEquals(Long.valueOf(utc("2019-02-12 18:52:06.661")), history.getInForceUntil(ch1At1818));
+	}
+
+	/** The last record on a channel, with no end time, runs on. */
+	@Test
+	public void theLastRecordOnAChannelRunsOn() {
+		SonobuoyHistory history = voyageHistory();
+		List<SonobuoyRecord> all = history.getAllRecords();
+		assertNull(history.getInForceUntil(all.get(all.size() - 1)));
+	}
+
+	/** An end time before the next record wins, and after it does not. */
+	@Test
+	public void theEarlierOfEndTimeAndNextRecordWins() {
+		long deployed = utc("2019-02-12 10:00:00.000");
+		long ended = utc("2019-02-12 14:00:00.000");
+		long replaced = utc("2019-02-12 16:00:00.000");
+		SonobuoyRecord endsFirst = new SonobuoyRecord(0, deployed, ended, "A", -66.0, 150.0, 90.0);
+		SonobuoyHistory history = new SonobuoyHistory();
+		history.setRecords(Arrays.asList(endsFirst,
+				new SonobuoyRecord(0, replaced, null, "B", -66.1, 150.1, 95.0)));
+		assertEquals(Long.valueOf(ended), history.getInForceUntil(endsFirst));
+
+		SonobuoyRecord endsLater = new SonobuoyRecord(1, deployed, replaced + 1000, "C", -66.0, 150.0, 90.0);
+		history.setRecords(Arrays.asList(endsLater,
+				new SonobuoyRecord(1, replaced, null, "D", -66.1, 150.1, 95.0)));
+		assertEquals(Long.valueOf(replaced), history.getInForceUntil(endsLater));
+	}
 }

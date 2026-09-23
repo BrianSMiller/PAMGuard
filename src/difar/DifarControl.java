@@ -62,6 +62,7 @@ import difar.display.DifarMatchProvider;
 import difar.display.SonobuoyManagerContainer;
 import difar.display.SonobuoyManagerProvider;
 import difar.offline.DifarDataCopyTask;
+import difar.offline.ClearCrossingTask;
 import difar.offline.UpdateCrossingTask;
 import difar.plots.DifarBearingPlotProvider;
 import difar.plots.DifarIntensityPlotProvider;
@@ -70,6 +71,7 @@ import generalDatabase.lookupTables.LookupItem;
 import generalDatabase.lookupTables.LookupList;
 import offlineProcessing.OLProcessDialog;
 import offlineProcessing.OfflineTaskGroup;
+import offlineProcessing.TaskGroupParams;
 import userDisplay.UserDisplayControl;
 import warnings.PamWarning;
 
@@ -451,6 +453,40 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 		}
 	}
 	
+	/**
+	 * Work out or clear the triangulations for a period, after a buoy has
+	 * changed.
+	 * <p>
+	 * The period is the whole time the buoy record is in force, not the loaded
+	 * period, so detections outside the viewer's window are covered too. Both
+	 * tasks mark what they change, so the binary files and the database are
+	 * rewritten. Runs without asking, since the user has already agreed to it.
+	 * @param startTime start of the period.
+	 * @param endTime end of the period.
+	 * @param recompute true to work the triangulations out again, false to
+	 * clear them.
+	 */
+	public void runCrossingTasks(long startTime, long endTime, boolean recompute) {
+		OfflineTaskGroup taskGroup = new OfflineTaskGroup(this, getUnitName());
+		taskGroup.setPrimaryDataBlock(difarProcess.getProcessedDifarData());
+		if (recompute) {
+			taskGroup.addTask(new UpdateCrossingTask<DifarDataUnit>(difarProcess.getProcessedDifarData()));
+		}
+		else {
+			taskGroup.addTask(new ClearCrossingTask<DifarDataUnit>(difarProcess.getProcessedDifarData()));
+		}
+		TaskGroupParams params = taskGroup.getTaskGroupParams();
+		params.dataChoice = TaskGroupParams.PROCESS_SPECIFICPERIOD;
+		params.startRedoDataTime = startTime;
+		params.endRedoDataTime = endTime;
+		/*
+		 * Run straight away. The user has already been told what this does and
+		 * agreed to it, so the offline tasks dialog would only ask again, in
+		 * different words.
+		 */
+		taskGroup.runTasks();
+	}
+
 	private void runOfflineTasks() {
 		if (offlineTaskGroup == null) {
 			offlineTaskGroup = new OfflineTaskGroup(this, getUnitName());

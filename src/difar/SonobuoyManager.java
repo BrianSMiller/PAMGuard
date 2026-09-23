@@ -705,7 +705,14 @@ public class SonobuoyManager extends PamProcess {
 		if (record == null) {
 			return false;
 		}
-		return calibrate(record, newHead, std == null ? 0 : std, numClips, calibrationStartTime);
+		if (!confirmChange(record)) {
+			return false;
+		}
+		boolean done = calibrate(record, newHead, std == null ? 0 : std, numClips, calibrationStartTime);
+		if (done) {
+			carryChangeDownstream(record);
+		}
+		return done;
 	}
 
 	/**
@@ -762,7 +769,7 @@ public class SonobuoyManager extends PamProcess {
 	 * @param record the buoy record that was edited.
 	 * @param edited the edited copy returned by the dialog.
 	 */
-	public void applyEdit(StreamerDataUnit record, StreamerDataUnit edited) {
+	public boolean applyEdit(StreamerDataUnit record, StreamerDataUnit edited) {
 		Streamer oldStreamer = record.getStreamerData();
 		Double oldHeading = oldStreamer == null ? null : oldStreamer.getHeading();
 		Streamer newStreamer = edited.getStreamerData();
@@ -787,11 +794,105 @@ public class SonobuoyManager extends PamProcess {
 			}
 		}
 		if (headingChanged) {
+			if (!confirmChange(record)) {
+				return false;
+			}
 			calibrate(record, newHeading, 0, 0, record.getTimeMilliseconds());
+			carryChangeDownstream(record);
 		} else {
 			saveRecord(record);
 			updateSonobuoyTableData();
 		}
+		return true;
+	}
+
+	/**
+	 * Ask before changing a buoy in a way that leaves saved triangulations
+	 * describing a calibration that no longer exists. Nothing is asked when
+	 * nothing downstream is affected.
+	 * @param record the buoy record about to change.
+	 * @return true to go ahead.
+	 */
+	private boolean confirmChange(StreamerDataUnit record) {
+		SonobuoyEditEffects effects = getEditEffects(record);
+		if (effects == null || !effects.isAnythingAffected()) {
+			return true;
+		}
+		String message = effects.getMessage(isViewer(),
+				difarControl.getDifarParameters().autoSaveDResult);
+		return JOptionPane.showConfirmDialog(difarControl.getGuiFrame(), message,
+				"Change sonobuoy", JOptionPane.OK_CANCEL_OPTION,
+				JOptionPane.WARNING_MESSAGE) == JOptionPane.OK_OPTION;
+	}
+
+	/**
+	 * Work out the triangulations again, or clear them, over the whole time the
+	 * changed record is in force. Only in the viewer: while PAMGuard is
+	 * running, data already written cannot be changed.
+	 * @param record the buoy record that changed.
+	 */
+	private void carryChangeDownstream(StreamerDataUnit record) {
+		SonobuoyEditEffects effects = getEditEffects(record);
+		if (effects == null || effects.getTriangulations() == 0) {
+			return;
+		}
+		boolean recompute = difarControl.getDifarParameters().autoSaveDResult;
+		if (isViewer()) {
+			difarControl.runCrossingTasks(effects.getStartTime(), effects.getEndTimeOrLatest(), recompute);
+		}
+		else {
+			updateLoadedTriangulations(effects, recompute);
+		}
+	}
+
+	/**
+	 * Bring the triangulations held in memory into line with a changed buoy.
+	 * <p>
+	 * Used while PAMGuard is running, where the offline tasks cannot be used.
+	 * Detections written to file before the change keep their old
+	 * triangulation until the data are reprocessed in the viewer.
+	 * @param effects what the change affects.
+	 * @param recompute true to work the triangulations out again, false to
+	 * clear them.
+	 */
+	private void updateLoadedTriangulations(SonobuoyEditEffects effects, boolean recompute) {
+		PamDataBlock<DifarDataUnit> detections = difarControl.getDifarProcess().getProcessedDifarData();
+		for (DifarDataUnit unit : detections.getDataCopy()) {
+			if (unit.getDifarCrossing() == null || !effects.covers(unit)) {
+				continue;
+			}
+			unit.setDifarCrossing(recompute
+					? difarControl.getDifarProcess().getDifarRangeInfo(unit) : null);
+			detections.updatePamData(unit, System.currentTimeMillis());
+		}
+	}
+
+	/**
+	 * @param record a buoy record.
+	 * @return what changing it affects, or null if it is not in the history.
+	 */
+	private SonobuoyEditEffects getEditEffects(StreamerDataUnit record) {
+		SonobuoyHistory history = difarControl.getSonobuoyHistory();
+		Streamer streamer = record.getStreamerData();
+		if (streamer == null) {
+			return null;
+		}
+		SonobuoyRecord buoy = history.getRecordAt(streamer.getStreamerIndex(),
+				record.getTimeMilliseconds());
+		if (buoy == null) {
+			return null;
+		}
+		PamDataBlock<DifarDataUnit> detections = difarControl.getDifarProcess().getProcessedDifarData();
+		return new SonobuoyEditEffects(buoy, history,
+				new ArrayList<PamDataUnit>(detections.getDataCopy()),
+				detections.getCurrentViewDataStart(), detections.getCurrentViewDataEnd());
+	}
+
+	/**
+	 * @return true in viewer mode.
+	 */
+	private boolean isViewer() {
+		return PamController.getInstance().getRunMode() == PamController.RUN_PAMVIEW;
 	}
 
 	/**
@@ -807,8 +908,7 @@ public class SonobuoyManager extends PamProcess {
 		record.setGpsData(null);
 		Streamer streamer = record.getStreamerData();
 		int channel = streamer.getStreamerIndex();
-		boolean viewer = PamController.getInstance().getRunMode() == PamController.RUN_PAMVIEW;
-		if (!viewer && buoyDataBlock.getLastUnit(1 << channel) == record) {
+		if (!isViewer() && buoyDataBlock.getLastUnit(1 << channel) == record) {
 			ArrayManager.getArrayManager().getCurrentArray().updateStreamer(channel, streamer);
 		}
 		buoyDataBlock.updatePamData(record, System.currentTimeMillis());
