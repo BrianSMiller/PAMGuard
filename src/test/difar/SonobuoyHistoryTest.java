@@ -271,4 +271,27 @@ public class SonobuoyHistoryTest {
 		assertFalse(record.isSaved());
 		assertEquals(Long.valueOf(9L), record.getEndTimeMillis());
 	}
+
+
+	/** The last record on a channel is found whether or not its buoy has ended. */
+	@Test
+	public void theLastRecordOnAChannelIsFound() {
+		SonobuoyHistory history = voyageHistory();
+		assertEquals("159.2", history.getLastRecord(2).getName());
+		assertEquals("160", history.getLastRecord(1).getName());
+		assertNull(history.getLastRecord(5));
+	}
+
+	/** An ended buoy is still the last record on its channel. */
+	@Test
+	public void anEndedBuoyIsStillTheLastRecord() {
+		long deployed = utc("2019-02-12 10:00:00.000");
+		long ended = utc("2019-02-12 14:00:00.000");
+		SonobuoyHistory history = new SonobuoyHistory();
+		history.setRecords(Collections.singletonList(
+				new SonobuoyRecord(0, deployed, ended, "A", -66.0, 150.0, 90.0)));
+
+		assertNull(history.getRecordAt(0, utc("2019-02-12 15:00:00.000")));
+		assertEquals("A", history.getLastRecord(0).getName());
+	}
 }

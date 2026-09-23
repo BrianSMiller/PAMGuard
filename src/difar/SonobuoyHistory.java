@@ -82,6 +82,19 @@ public class SonobuoyHistory {
 	}
 
 	/**
+	 * @param channel the channel.
+	 * @return the last record on a channel, whether or not its buoy has ended,
+	 * or null if the channel has none.
+	 */
+	public SonobuoyRecord getLastRecord(int channel) {
+		NavigableMap<Long, SonobuoyRecord> records = recordsByChannel.get(channel);
+		if (records == null || records.isEmpty()) {
+			return null;
+		}
+		return records.lastEntry().getValue();
+	}
+
+	/**
 	 * @return every record held, earliest first, and by channel where two
 	 * records share a time. The list cannot be changed.
 	 */
