@@ -78,6 +78,14 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 	public double maxBearingResidual = 20.0;
 
 	/**
+	 * Largest number of detections on each other buoy that are tried as matches
+	 * for one detection. The closest in time and frequency are kept. A larger
+	 * number finds matches in a busy chorus, at the cost of more combinations
+	 * to localise.
+	 */
+	public int maxCandidatesPerBuoy = 10;
+
+	/**
 	 * Standard deviation of a DIFAR bearing, in degrees. This sets how much
 	 * weight bearings carry in a localisation, against the arrival time
 	 * differences.
@@ -390,6 +398,9 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 			}
 			if (ndp.maxTimeDelayResidual <= 0) {
 				ndp.maxTimeDelayResidual = 6.0;
+			}
+			if (ndp.maxCandidatesPerBuoy <= 0) {
+				ndp.maxCandidatesPerBuoy = 10;
 			}
 			if (ndp.maxBearingResidual <= 0) {
 				ndp.maxBearingResidual = 20.0;

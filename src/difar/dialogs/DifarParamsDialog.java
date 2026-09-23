@@ -139,7 +139,8 @@ public class DifarParamsDialog extends PamDialog {
 	private JCheckBox useSummaryLine;
 
 //	Localisation
-	private JTextField detectionTimingError, maxTimeDelayResidual, maxBearingResidual, bearingError;
+	private JTextField detectionTimingError, maxTimeDelayResidual, maxBearingResidual, bearingError,
+			maxCandidatesPerBuoy;
 	private SourcePanel calibrationSourcePanel;
 	private JCheckBox loadViewerClips;
 	
@@ -313,7 +314,14 @@ public class DifarParamsDialog extends PamDialog {
 				+ "differences when a position is calculated. Around 5 degrees is<br>"
 				+ "typical, and a well behaved array can reach 2 degrees.</HTML>");
 
-		JComponent[] localisation = {bearingError, detectionTimingError, maxTimeDelayResidual, maxBearingResidual};
+		maxCandidatesPerBuoy = new JTextField();
+		maxCandidatesPerBuoy.setName("Max candidates per buoy");
+		maxCandidatesPerBuoy.setToolTipText("<HTML>How many detections on each other buoy are tried as matches<br>"
+				+ "for one detection. The closest in time and frequency are kept.<br>"
+				+ "Raise this where many animals are calling at once.</HTML>");
+
+		JComponent[] localisation = {bearingError, detectionTimingError, maxTimeDelayResidual, maxBearingResidual,
+				maxCandidatesPerBuoy};
 		PamPanel localisationPanel = new PamPanel(new GridBagLayout());
 		localisationPanel.setBorder(new TitledBorder("Localisation"));
 		PamPanel.layoutGrid(localisationPanel, localisation);
@@ -624,6 +632,7 @@ public class DifarParamsDialog extends PamDialog {
 		detectionTimingError.setText(new Double(difarParameters.detectionTimingError).toString());
 		maxTimeDelayResidual.setText(new Double(difarParameters.maxTimeDelayResidual).toString());
 		maxBearingResidual.setText(new Double(difarParameters.maxBearingResidual).toString());
+		maxCandidatesPerBuoy.setText(new Integer(difarParameters.maxCandidatesPerBuoy).toString());
 
 		secondsToPreceed.setText(new Double(difarParameters.secondsToPreceed).toString());
 		keepRawDataTime.setText(new Integer(difarParameters.keepRawDataTime).toString());
@@ -707,6 +716,11 @@ public class DifarParamsDialog extends PamDialog {
 			if (maxBearing > 180) {
 				return showWarning("Max bearing residual cannot be more than 180 degrees");
 			}
+			int maxCandidates = Integer.valueOf(maxCandidatesPerBuoy.getText());
+			if (maxCandidates <= 0) {
+				return showWarning("Max candidates per buoy must be at least one");
+			}
+			difarParameters.maxCandidatesPerBuoy = maxCandidates;
 			difarParameters.bearingError = bearingSd;
 			difarParameters.detectionTimingError = timingError;
 			difarParameters.maxTimeDelayResidual = maxDelay;
@@ -838,6 +852,7 @@ public class DifarParamsDialog extends PamDialog {
 		detectionTimingError.setText(new Double(newDifarParameters.detectionTimingError).toString());
 		maxTimeDelayResidual.setText(new Double(newDifarParameters.maxTimeDelayResidual).toString());
 		maxBearingResidual.setText(new Double(newDifarParameters.maxBearingResidual).toString());
+		maxCandidatesPerBuoy.setText(new Integer(newDifarParameters.maxCandidatesPerBuoy).toString());
 
 		secondsToPreceed.setText(new Double(newDifarParameters.secondsToPreceed).toString());
 		keepRawDataTime.setText(new Integer(newDifarParameters.keepRawDataTime).toString());
