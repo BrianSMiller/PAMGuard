@@ -62,7 +62,6 @@ import difar.display.DifarMatchProvider;
 import difar.display.SonobuoyManagerContainer;
 import difar.display.SonobuoyManagerProvider;
 import difar.offline.DifarDataCopyTask;
-import difar.offline.ClearCrossingTask;
 import difar.offline.UpdateCrossingTask;
 import difar.plots.DifarBearingPlotProvider;
 import difar.plots.DifarIntensityPlotProvider;
@@ -463,18 +462,11 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 	 * rewritten. Runs without asking, since the user has already agreed to it.
 	 * @param startTime start of the period.
 	 * @param endTime end of the period.
-	 * @param recompute true to work the triangulations out again, false to
-	 * clear them.
 	 */
-	public void runCrossingTasks(long startTime, long endTime, boolean recompute) {
+	public void runCrossingTasks(long startTime, long endTime) {
 		OfflineTaskGroup taskGroup = new OfflineTaskGroup(this, getUnitName());
 		taskGroup.setPrimaryDataBlock(difarProcess.getProcessedDifarData());
-		if (recompute) {
-			taskGroup.addTask(new UpdateCrossingTask<DifarDataUnit>(difarProcess.getProcessedDifarData()));
-		}
-		else {
-			taskGroup.addTask(new ClearCrossingTask<DifarDataUnit>(difarProcess.getProcessedDifarData()));
-		}
+		taskGroup.addTask(new UpdateCrossingTask<DifarDataUnit>(difarProcess.getProcessedDifarData()));
 		TaskGroupParams params = taskGroup.getTaskGroupParams();
 		params.dataChoice = TaskGroupParams.PROCESS_SPECIFICPERIOD;
 		params.startRedoDataTime = startTime;

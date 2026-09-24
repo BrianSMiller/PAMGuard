@@ -3,8 +3,6 @@ package difar;
 import java.util.List;
 
 import PamUtils.PamCalendar;
-import PamUtils.PamUtils;
-import PamguardMVC.PamDataUnit;
 
 /**
  * What changing one buoy record does to the detections made on it.
@@ -17,7 +15,30 @@ import PamguardMVC.PamDataUnit;
  */
 public class SonobuoyEditEffects {
 
+	/**
+	 * What this needs to know about a detection. Keeping it to this much lets
+	 * the rules be worked out and tested without PAMGuard running.
+	 */
+	public interface Detection {
+
+		/** @return time of the detection, in milliseconds. */
+		long getTimeMillis();
+
+		/** @return channel the detection was made on. */
+		int getChannel();
+
+		/** @return true if a triangulation has been saved for it. */
+		boolean hasTriangulation();
+	}
+
 	private final SonobuoyRecord record;
+
+	/**
+	 * Detections can only be matched with others within a travel time of them,
+	 * so a triangulation reaches a little either side of the buoy's own period.
+	 * Sixty seconds is a sound travelling ninety kilometres.
+	 */
+	private static final long MATCH_MARGIN_MILLIS = 60000;
 
 	private final long startTime;
 
@@ -38,25 +59,46 @@ public class SonobuoyEditEffects {
 	 * @param loadedEnd end of the loaded period.
 	 */
 	public SonobuoyEditEffects(SonobuoyRecord record, SonobuoyHistory history,
-			List<PamDataUnit> detections, long loadedStart, long loadedEnd) {
+			List<Detection> detections, long loadedStart, long loadedEnd) {
+		this(record, history, detections, loadedStart, loadedEnd, record.getTimeMillis(),
+				history.getInForceUntil(record));
+	}
+
+	/**
+	 * Work out what changing a record affects, where the change moves the
+	 * record's own times. The period covered is then the old one and the new
+	 * one together, since detections in both are affected.
+	 * @param record the record being changed.
+	 * @param history the sonobuoy history.
+	 * @param detections the processed DIFAR detections that are loaded.
+	 * @param loadedStart start of the loaded period.
+	 * @param loadedEnd end of the loaded period.
+	 * @param newStartTime the record's new deploy time.
+	 * @param newEndTime the record's new end time, or null if it has none.
+	 */
+	public SonobuoyEditEffects(SonobuoyRecord record, SonobuoyHistory history,
+			List<Detection> detections, long loadedStart, long loadedEnd,
+			long newStartTime, Long newEndTime) {
 		this.record = record;
-		this.startTime = record.getTimeMillis();
-		this.endTime = history.getInForceUntil(record);
+		Long oldEndTime = history.getInForceUntil(record);
+		this.startTime = Math.min(record.getTimeMillis(), newStartTime);
+		this.endTime = oldEndTime == null || newEndTime == null
+				? null : Math.max(oldEndTime, newEndTime);
 		count(detections);
 		countsAreOfLoadedData = loadedStart > startTime
 				|| (endTime != null && loadedEnd < endTime);
 	}
 
-	private void count(List<PamDataUnit> detections) {
+	private void count(List<Detection> detections) {
 		if (detections == null) {
 			return;
 		}
-		for (PamDataUnit unit : detections) {
-			if (!(unit instanceof DifarDataUnit) || !covers(unit)) {
+		for (Detection detection : detections) {
+			if (!covers(detection)) {
 				continue;
 			}
 			bearings++;
-			if (((DifarDataUnit) unit).getDifarCrossing() != null) {
+			if (detection.hasTriangulation()) {
 				triangulations++;
 			}
 		}
@@ -67,11 +109,11 @@ public class SonobuoyEditEffects {
 	 * @return true if it was made on the record's buoy while the record was in
 	 * force.
 	 */
-	public boolean covers(PamDataUnit unit) {
-		if (PamUtils.getSingleChannel(unit.getChannelBitmap()) != record.getChannel()) {
+	public boolean covers(Detection detection) {
+		if (detection.getChannel() != record.getChannel()) {
 			return false;
 		}
-		long time = unit.getTimeMilliseconds();
+		long time = detection.getTimeMillis();
 		return time >= startTime && (endTime == null || time < endTime);
 	}
 
@@ -95,7 +137,15 @@ public class SonobuoyEditEffects {
 	 * running to the end of the data.
 	 */
 	public long getEndTimeOrLatest() {
-		return endTime == null ? Long.MAX_VALUE : endTime;
+		return endTime == null ? Long.MAX_VALUE : endTime + MATCH_MARGIN_MILLIS;
+	}
+
+	/**
+	 * @return start of the period to work through, allowing for triangulations
+	 * that reach a little before the buoy's own period.
+	 */
+	public long getReprocessStartTime() {
+		return startTime - MATCH_MARGIN_MILLIS;
 	}
 
 	/**
@@ -141,12 +191,12 @@ public class SonobuoyEditEffects {
 		if (triangulations == 0) {
 			message.append("No saved triangulations are affected.");
 		} else {
-			message.append(String.format("%d saved triangulations no longer describe this buoy.",
+			message.append(String.format("%d triangulations will be worked out again.",
 					triangulations));
 			if (!viewer) {
-				message.append("<p><p>Only those still in memory can be changed. Detections "
-						+ "already written to file keep their old triangulation until the data "
-						+ "are reprocessed in Viewer mode, from DIFAR offline tasks.");
+				message.append("<p><p>Only those still in memory can be worked out again. "
+						+ "Detections already written to file keep their old triangulation until "
+						+ "the data are reprocessed in Viewer mode, from DIFAR offline tasks.");
 			}
 		}
 		if (countsAreOfLoadedData) {
