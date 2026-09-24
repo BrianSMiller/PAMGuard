@@ -107,11 +107,18 @@ public class DifarProcess extends PamProcess {
 		processedDifarData.SetLogging(new DifarSqlLogging(difarControl, processedDifarData));
 		processedDifarData.setBinaryDataSource(new DifarBinaryDataSource(difarControl, processedDifarData));
 		processedDifarData.setShouldLog(true);
+		processedDifarData.setShouldBinary(true);
 		processedDifarData.setClearAtStart(false);
 		addOutputDataBlock(queuedDifarData);
 		addOutputDataBlock(processedDifarData);
 		calibrationDataBlock = new CalibrationDataBlock(this);
 		calibrationDataBlock.SetLogging(new CalibrationLogging(this, calibrationDataBlock));
+		calibrationDataBlock.setShouldLog(true);
+		/*
+		 * A day, like the clips. A calibration is worth keeping for as long as
+		 * the detections it applies to.
+		 */
+		calibrationDataBlock.setNaturalLifetime(24 * 3600);
 		addOutputDataBlock(calibrationDataBlock);
 	}
 
@@ -1724,7 +1731,18 @@ public class DifarProcess extends PamProcess {
 //			phoneNumber = daqProcess.getAcquisitionControl().acquisitionParameters.getChannelListIndexes(phoneNumber);
 //		}
 		LatLong hLatLong = difarDataUnit.getOriginLatLong(false);
-		double arrayHead = difarDataUnit.getHydrophoneHeading(false);
+		if (hLatLong == null) {
+			return null;
+		}
+		/*
+		 * The correction this clip suggests is on top of whatever correction the
+		 * buoy already has, and the caller adds the two together. So the heading
+		 * used here has to be the same one the caller uses, which is the buoy
+		 * record's. Reading it from the core array instead gave a different
+		 * number, and the difference landed straight in the stored heading.
+		 */
+		double arrayHead = difarControl.sonobuoyManager.getCompassCorrection(phoneNumber,
+				difarDataUnit.getTimeMilliseconds());
 		double bearing = hLatLong.bearingTo(shipGps);
 		double bearingCorr = bearing - (difarDataUnit.getSelectedAngle() + arrayHead);
 		bearingCorr = PamUtils.constrainedAngle(bearingCorr, 180);
