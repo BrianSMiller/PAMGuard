@@ -8,6 +8,8 @@ import PamDetection.LocContents;
 import PamUtils.LatLong;
 import PamguardMVC.PamDataUnit;
 import difar.DIFARTargetMotionInformation;
+import difar.SonobuoyHistory;
+import difar.SonobuoyRecord;
 import pamMaths.PamVector;
 
 /**
@@ -19,6 +21,12 @@ import pamMaths.PamVector;
  * travel time between them. Bearing and timing errors can be added to any
  * detection. Each detection names its own source, so a group can be built from
  * two animals, which is what a wrong match looks like.
+ * <p>
+ * Detections can also be built against a sonobuoy history, where each one
+ * carries the magnetic DIFAR angle it measured, and takes its buoy position and
+ * compass correction from the record in force at its time. Changing a record
+ * then changes the bearings, as it does in DIFAR, so a test can calibrate a
+ * buoy and check what happens to the localisation.
  * <p>
  * Only the data units are fakes. The localisation itself is the real thing, so
  * no PamController and no audio are needed.
@@ -57,6 +65,49 @@ public class DifarTestScenario {
 		double arrival = travelTime(buoy, source) + timingErrorSeconds;
 		long timeMillis = CALL_TIME + Math.round(arrival * 1000.);
 		units.add(new FakeBuoyUnit(timeMillis, nextChannel++, toLatLong(buoy), bearingDeg));
+		return this;
+	}
+
+	/**
+	 * A buoy record for a position on the grid.
+	 * @param channel channel the buoy is on.
+	 * @param buoy buoy position in metres, as {x east, y north}
+	 * @param headingDeg compass correction, in degrees.
+	 * @param timeMillis time the record comes into force.
+	 * @return the record.
+	 */
+	public static SonobuoyRecord buoyRecord(int channel, double[] buoy, double headingDeg,
+			long timeMillis) {
+		LatLong position = toLatLong(buoy);
+		return new SonobuoyRecord(channel, timeMillis, null, "buoy " + channel,
+				position.getLatitude(), position.getLongitude(), headingDeg);
+	}
+
+	/**
+	 * Add a detection that reads its buoy from a sonobuoy history.
+	 * <p>
+	 * The detection keeps the magnetic angle it measured, which is the true
+	 * bearing less the buoy's compass correction at the time. Its position and
+	 * bearing are worked out from whatever record is in force when they are
+	 * asked for, so calibrating the buoy afterwards moves the bearing.
+	 * @param history the history the detection reads.
+	 * @param channel channel the detection was made on.
+	 * @param buoy buoy position in metres, as {x east, y north}
+	 * @param source source position in metres
+	 * @param bearingErrorDeg error added to the measured angle, in degrees
+	 * @param timingErrorSeconds error added to the arrival time, in seconds
+	 * @return this scenario, so calls can be chained.
+	 */
+	public DifarTestScenario addCalibratedDetection(SonobuoyHistory history, int channel,
+			double[] buoy, double[] source, double bearingErrorDeg, double timingErrorSeconds) {
+		double dx = source[0] - buoy[0];
+		double dy = source[1] - buoy[1];
+		double trueBearingDeg = Math.toDegrees(Math.atan2(dx, dy)) + bearingErrorDeg;
+		double arrival = travelTime(buoy, source) + timingErrorSeconds;
+		long timeMillis = CALL_TIME + Math.round(arrival * 1000.);
+		SonobuoyRecord record = history.getRecordAt(channel, timeMillis);
+		double headingDeg = record == null || record.getHeading() == null ? 0 : record.getHeading();
+		units.add(new CalibratedBuoyUnit(timeMillis, channel, history, trueBearingDeg - headingDeg));
 		return this;
 	}
 
@@ -119,6 +170,81 @@ public class DifarTestScenario {
 		@Override
 		public GpsData getOriginLatLong(boolean recalculate) {
 			return origin;
+		}
+	}
+
+	/**
+	 * A detection that takes its buoy position and compass correction from a
+	 * sonobuoy history, and keeps only the magnetic angle it measured.
+	 */
+	private static class CalibratedBuoyUnit extends PamDataUnit {
+
+		private final SonobuoyHistory history;
+
+		private final int channel;
+
+		private final double difarAngleDeg;
+
+		CalibratedBuoyUnit(long timeMillis, int channel, SonobuoyHistory history, double difarAngleDeg) {
+			super(timeMillis);
+			this.channel = channel;
+			this.history = history;
+			this.difarAngleDeg = difarAngleDeg;
+			setChannelBitmap(1 << channel);
+			setLocalisation(new CalibratedBearing(this));
+		}
+
+		/** @return the buoy record in force when this detection was made, or null. */
+		private SonobuoyRecord getRecord() {
+			return history.getRecordAt(channel, getTimeMilliseconds());
+		}
+
+		/** @return the true bearing, the measured angle plus the compass correction. */
+		double getTrueBearingDeg() {
+			SonobuoyRecord record = getRecord();
+			Double heading = record == null ? null : record.getHeading();
+			return difarAngleDeg + (heading == null ? 0 : heading);
+		}
+
+		@Override
+		public GpsData getOriginLatLong(boolean recalculate) {
+			SonobuoyRecord record = getRecord();
+			if (record == null || !record.hasPosition()) {
+				return null;
+			}
+			return new GpsData(new LatLong(record.getLatitude(), record.getLongitude()));
+		}
+	}
+
+	/** The bearing of a detection that reads its buoy from the history. */
+	private static class CalibratedBearing extends AbstractLocalisation {
+
+		private final CalibratedBuoyUnit unit;
+
+		CalibratedBearing(CalibratedBuoyUnit unit) {
+			super(unit, LocContents.HAS_BEARING, 0);
+			this.unit = unit;
+		}
+
+		@Override
+		public boolean bearingAmbiguity() {
+			return false;
+		}
+
+		@Override
+		public double[] getAngles() {
+			return new double[] {Math.toRadians(unit.getTrueBearingDeg())};
+		}
+
+		@Override
+		public double[] getAngleErrors() {
+			return new double[] {Math.toRadians(BEARING_SD_DEG)};
+		}
+
+		@Override
+		public PamVector[] getWorldVectors() {
+			double radians = Math.toRadians(90 - unit.getTrueBearingDeg());
+			return new PamVector[] {new PamVector(Math.cos(radians), Math.sin(radians), 0)};
 		}
 	}
 
