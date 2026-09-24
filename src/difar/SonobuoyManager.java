@@ -7,13 +7,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.awt.Point;
 
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.ButtonGroup;
-import javax.swing.JLabel;
 import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JRadioButton;
 import javax.swing.JTable;
 import javax.swing.JViewport;
 import javax.swing.RowSorter;
@@ -716,12 +710,12 @@ public class SonobuoyManager extends PamProcess {
 		if (record == null) {
 			return false;
 		}
-		if (!confirmChange(record)) {
+		if (!confirmChange(record, null)) {
 			return false;
 		}
 		boolean done = calibrate(record, newHead, std == null ? 0 : std, numClips, calibrationStartTime);
 		if (done) {
-			carryChangeDownstream(record);
+			carryChangeDownstream(record, null);
 		}
 		return done;
 	}
@@ -804,68 +798,35 @@ public class SonobuoyManager extends PamProcess {
 				record.addDataAnnotation(newEnd);
 			}
 		}
+		if (!confirmChange(record, edited)) {
+			return false;
+		}
 		if (headingChanged) {
-			if (!confirmChange(record)) {
-				return false;
-			}
 			calibrate(record, newHeading, 0, 0, record.getTimeMilliseconds());
-			carryChangeDownstream(record);
 		} else {
 			saveRecord(record);
 			updateSonobuoyTableData();
 		}
+		carryChangeDownstream(record, edited);
 		return true;
 	}
 
-	/** What to do with the triangulations after a buoy changes. */
-	private enum ChangeChoice { CANCEL, RECOMPUTE, CLEAR }
-
-	/** What the user chose in the last confirmation, for the change now in hand. */
-	private ChangeChoice changeChoice = ChangeChoice.CANCEL;
-
 	/**
-	 * Ask before changing a buoy in a way that leaves saved triangulations
-	 * describing a calibration that no longer exists. The user is told what is
-	 * affected, and chooses whether the triangulations are worked out again or
-	 * cleared. Nothing is asked when nothing downstream is affected.
+	 * Ask before a change that leaves saved triangulations describing a buoy
+	 * that no longer exists as it was. Nothing is asked when nothing downstream
+	 * is affected.
 	 * @param record the buoy record about to change.
+	 * @param edited the edited copy, or null where only the heading changes.
 	 * @return true to go ahead.
 	 */
-	private boolean confirmChange(StreamerDataUnit record) {
-		SonobuoyEditEffects effects = getEditEffects(record);
+	private boolean confirmChange(StreamerDataUnit record, StreamerDataUnit edited) {
+		SonobuoyEditEffects effects = getEditEffects(record, edited);
 		if (effects == null || !effects.isAnythingAffected()) {
-			changeChoice = ChangeChoice.RECOMPUTE;
 			return true;
 		}
-		JRadioButton recompute = new JRadioButton("Work the triangulations out again now");
-		JRadioButton clear = new JRadioButton("Clear them, and work them out later");
-		ButtonGroup group = new ButtonGroup();
-		group.add(recompute);
-		group.add(clear);
-		if (difarControl.getDifarParameters().autoSaveDResult) {
-			recompute.setSelected(true);
-		} else {
-			clear.setSelected(true);
-		}
-		boolean choose = effects.getTriangulations() > 0;
-		recompute.setVisible(choose);
-		clear.setVisible(choose);
-
-		JPanel panel = new JPanel();
-		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-		panel.add(new JLabel(effects.getMessage(isViewer())));
-		panel.add(Box.createVerticalStrut(8));
-		panel.add(recompute);
-		panel.add(clear);
-
-		int answer = JOptionPane.showConfirmDialog(difarControl.getGuiFrame(), panel,
-				"Change sonobuoy", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
-		if (answer != JOptionPane.OK_OPTION) {
-			changeChoice = ChangeChoice.CANCEL;
-			return false;
-		}
-		changeChoice = recompute.isSelected() ? ChangeChoice.RECOMPUTE : ChangeChoice.CLEAR;
-		return true;
+		return JOptionPane.showConfirmDialog(difarControl.getGuiFrame(),
+				effects.getMessage(isViewer()), "Change sonobuoy",
+				JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.OK_OPTION;
 	}
 
 	/**
@@ -874,17 +835,16 @@ public class SonobuoyManager extends PamProcess {
 	 * running, data already written cannot be changed.
 	 * @param record the buoy record that changed.
 	 */
-	private void carryChangeDownstream(StreamerDataUnit record) {
-		SonobuoyEditEffects effects = getEditEffects(record);
+	private void carryChangeDownstream(StreamerDataUnit record, StreamerDataUnit edited) {
+		SonobuoyEditEffects effects = getEditEffects(record, edited);
 		if (effects == null || effects.getTriangulations() == 0) {
 			return;
 		}
-		boolean recompute = changeChoice == ChangeChoice.RECOMPUTE;
 		if (isViewer()) {
-			difarControl.runCrossingTasks(effects.getStartTime(), effects.getEndTimeOrLatest(), recompute);
+			difarControl.runCrossingTasks(effects.getReprocessStartTime(), effects.getEndTimeOrLatest());
 		}
 		else {
-			updateLoadedTriangulations(effects, recompute);
+			updateLoadedTriangulations(effects);
 		}
 	}
 
@@ -895,17 +855,14 @@ public class SonobuoyManager extends PamProcess {
 	 * Detections written to file before the change keep their old
 	 * triangulation until the data are reprocessed in the viewer.
 	 * @param effects what the change affects.
-	 * @param recompute true to work the triangulations out again, false to
-	 * clear them.
 	 */
-	private void updateLoadedTriangulations(SonobuoyEditEffects effects, boolean recompute) {
+	private void updateLoadedTriangulations(SonobuoyEditEffects effects) {
 		PamDataBlock<DifarDataUnit> detections = difarControl.getDifarProcess().getProcessedDifarData();
 		for (DifarDataUnit unit : detections.getDataCopy()) {
-			if (unit.getDifarCrossing() == null || !effects.covers(unit)) {
+			if (unit.getDifarCrossing() == null || !effects.covers(new DifarDetection(unit))) {
 				continue;
 			}
-			unit.setDifarCrossing(recompute
-					? difarControl.getDifarProcess().getDifarRangeInfo(unit) : null);
+			unit.setDifarCrossing(difarControl.getDifarProcess().getDifarRangeInfo(unit));
 			detections.updatePamData(unit, System.currentTimeMillis());
 		}
 	}
@@ -914,7 +871,7 @@ public class SonobuoyManager extends PamProcess {
 	 * @param record a buoy record.
 	 * @return what changing it affects, or null if it is not in the history.
 	 */
-	private SonobuoyEditEffects getEditEffects(StreamerDataUnit record) {
+	private SonobuoyEditEffects getEditEffects(StreamerDataUnit record, StreamerDataUnit edited) {
 		SonobuoyHistory history = difarControl.getSonobuoyHistory();
 		Streamer streamer = record.getStreamerData();
 		if (streamer == null) {
@@ -926,9 +883,43 @@ public class SonobuoyManager extends PamProcess {
 			return null;
 		}
 		PamDataBlock<DifarDataUnit> detections = difarControl.getDifarProcess().getProcessedDifarData();
-		return new SonobuoyEditEffects(buoy, history,
-				new ArrayList<PamDataUnit>(detections.getDataCopy()),
-				detections.getCurrentViewDataStart(), detections.getCurrentViewDataEnd());
+		List<SonobuoyEditEffects.Detection> loaded = new ArrayList<>();
+		for (DifarDataUnit unit : detections.getDataCopy()) {
+			loaded.add(new DifarDetection(unit));
+		}
+		long newStart = edited == null ? record.getTimeMilliseconds() : edited.getTimeMilliseconds();
+		TimestampAnnotation newEnd = edited == null ? findEndTime(record) : findEndTime(edited);
+		return new SonobuoyEditEffects(buoy, history, loaded,
+				detections.getCurrentViewDataStart(), detections.getCurrentViewDataEnd(),
+				newStart, newEnd == null ? null : newEnd.getTimestamp());
+	}
+
+	/**
+	 * A DIFAR detection as the edit effects see it: its time, its channel, and
+	 * whether a triangulation is saved for it.
+	 */
+	private static class DifarDetection implements SonobuoyEditEffects.Detection {
+
+		private final DifarDataUnit unit;
+
+		DifarDetection(DifarDataUnit unit) {
+			this.unit = unit;
+		}
+
+		@Override
+		public long getTimeMillis() {
+			return unit.getTimeMilliseconds();
+		}
+
+		@Override
+		public int getChannel() {
+			return PamUtils.getSingleChannel(unit.getChannelBitmap());
+		}
+
+		@Override
+		public boolean hasTriangulation() {
+			return unit.getDifarCrossing() != null;
+		}
 	}
 
 	/**
