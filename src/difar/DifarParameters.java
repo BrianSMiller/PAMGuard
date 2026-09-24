@@ -40,12 +40,12 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 	 * natural lifetime for the queued data datablock-note there is also 
 	 * some control over this withing the clip generator history section of the hiding panel
 	 */
-	public int queuedDataKeepTime = 60; // minutes
+	public int queuedDataKeepTime = 1440; // minutes
 	
 	/**
 	 * natural lifetime for the processed data datablock
 	 */
-	public int processedDataKeepTime = 10; // minutes
+	public int processedDataKeepTime = 1440; // minutes
 	
 	public boolean clearQueueAtStart = true;
 	

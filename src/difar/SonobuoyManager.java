@@ -153,6 +153,11 @@ public class SonobuoyManager extends PamProcess {
 		buoyPositions.setOverlayDraw(new SonobuoyOverlayGraphics(difarControl));
 		buoyPositions.setPamSymbolManager(new StandardSymbolManager(buoyPositions,
 				SonobuoyOverlayGraphics.defaultSymbol, true));
+		/*
+		 * A day, so a buoy stays on the map for as long as the detections made
+		 * on it. These units are rebuilt from the history, never saved.
+		 */
+		buoyPositions.setNaturalLifetime(24 * 3600);
 		addOutputDataBlock(buoyPositions);
 	}
 
