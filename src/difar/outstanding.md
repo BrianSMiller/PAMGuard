@@ -409,6 +409,28 @@ cannot see drift: a clean peak gives a precise but biased delay.
    its predicted positions and their covariances as sigma_p, and matching and the filter can
    alternate, EM style. The state-space idea from September, now with a defined place to plug in.
 
+## Functional tests of correlation (next)
+
+From parking the DCLDE 2024 reanalysis, 6 October 2026: test time delays by
+correlation on data whose timing is known before relying on it on 32 loosely
+synchronised sonobuoys. Notes on what DCLDE taught are in
+S:\manuscripts\2023-DCLDE\TODO.md and DATA_ISSUES.md.
+
+1. **Synthetic first.** Simulated DIFAR clips (simulateDifar, with w15 in double
+   precision) of one call at known positions, through ClipDelays and the match
+   selector: correlated arrival times should reproduce the simulated delays to a
+   frame or two, and a deliberately wrong pairing should fail the correlated
+   residual. The ClipCorrelator unit tests cover spectrograms only, not the path
+   through matching.
+2. **AAD recordings.** All channels share one multichannel A/D converter, so
+   delays between sonobuoys are exact to a few samples. A voyage with a research
+   vessel track (ENRICH 2019 or later) gives a known source: correlated delays
+   on vessel noise or calibration transmissions should match those predicted
+   from the vessel and sonobuoy positions.
+3. **Then real calls on AAD data:** peak heights for blue whale and other call
+   types, the threshold, and how often correlation and start-time delays
+   disagree.
+
 ## Core issues for Doug
 
 - Settings were saved and loaded with quadratic string building. `Ascii6Bit.createStringData()`
