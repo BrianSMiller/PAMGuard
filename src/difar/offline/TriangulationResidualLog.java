@@ -14,6 +14,7 @@ import Localiser.algorithms.genericLocaliser.Chi2TimeDelays;
 import PamUtils.PamCalendar;
 import PamUtils.PamUtils;
 import PamguardMVC.PamDataUnit;
+import difar.CorrelatedArrivals;
 import difar.DIFARTargetMotionInformation;
 import difar.DifarDataUnit;
 import difar.DifarMatchSelector;
@@ -30,7 +31,10 @@ import pamMaths.PamVector;
  * This is the evidence for choosing timing errors and limits. Each row gives
  * a delay's measured and predicted values, whether it was measured by
  * correlation, the separation of its two sonobuoys, how long each had been
- * deployed, and the bearing residual at each end. Plotted against separation
+ * deployed, and the bearing residual at each end. When correlation is on, it
+ * also gives how each clip's correlation with the seed went: the height of its
+ * best peak, and whether that passed the threshold, fell below it, or could not
+ * be measured. Plotted against separation
  * and against time since deployment, the residuals show how much of the timing
  * error comes from the measurement, and how much from sonobuoys that are not
  * where their records say, for example because they have drifted.
@@ -40,7 +44,8 @@ public class TriangulationResidualLog {
 	private static final String HEADER = "TriangulationUID,UTC,Species,Sonobuoys,Chi2PerDof,"
 			+ "ChannelA,ChannelB,ClipUIDA,ClipUIDB,SonobuoyA,SonobuoyB,"
 			+ "SeparationM,TravelTimeS,MeasuredDelayS,PredictedDelayS,ResidualS,DelayErrorS,Correlated,"
-			+ "HoursDeployedA,HoursDeployedB,BearingResidualADeg,BearingResidualBDeg";
+			+ "HoursDeployedA,HoursDeployedB,BearingResidualADeg,BearingResidualBDeg,"
+			+ "SeedClipUID,CorrelationA,CorrelationB,PeakA,PeakB";
 
 	private final List<String> rows = new ArrayList<>();
 
@@ -74,6 +79,8 @@ public class TriangulationResidualLog {
 		ArrayList<Double> predicted = row(Chi2TimeDelays.calcTimeDelays(sourcePos, info.getDelayHydrophonePositions(),
 				speedOfSound));
 		double[] bearingResiduals = bearingResiduals(info, source);
+		CorrelatedArrivals correlation = match.getCorrelation();
+		String seedUID = correlation == null ? "" : Long.toString(correlation.getSeed().getUID());
 
 		String species = units.get(0) instanceof DifarDataUnit ? ((DifarDataUnit) units.get(0)).getSpeciesCode() : null;
 		String common = String.format(Locale.ROOT, "%d,%s,%s,%d,%s", crossing.getUID(),
@@ -91,7 +98,7 @@ public class TriangulationResidualLog {
 			double[] pb = positions.get(b);
 			double separation = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]);
 			double residual = predicted == null || j >= predicted.size() ? Double.NaN : measured.get(j) - predicted.get(j);
-			rows.add(String.format(Locale.ROOT, "%s,%d,%d,%d,%d,%s,%s,%.1f,%s,%s,%s,%s,%s,%b,%s,%s,%s,%s",
+			rows.add(String.format(Locale.ROOT, "%s,%d,%d,%d,%d,%s,%s,%.1f,%s,%s,%s,%s,%s,%b,%s,%s,%s,%s,%s,%s,%s,%s,%s",
 					common, channel(unitA), channel(unitB), unitA.getUID(), unitB.getUID(),
 					text(name(history, unitA)), text(name(history, unitB)), separation,
 					number(separation / speedOfSound, 4), number(measured.get(j), 4),
@@ -99,7 +106,9 @@ public class TriangulationResidualLog {
 					number(residual, 4), number(errors.get(j), 4),
 					correlated != null && j < correlated.size() && correlated.get(j),
 					number(hoursDeployed(history, unitA), 3), number(hoursDeployed(history, unitB), 3),
-					number(bearingResiduals[a], 2), number(bearingResiduals[b], 2)));
+					number(bearingResiduals[a], 2), number(bearingResiduals[b], 2),
+					seedUID, status(correlation, unitA), status(correlation, unitB),
+					peak(correlation, unitA), peak(correlation, unitB)));
 		}
 		triangulations++;
 	}
@@ -174,6 +183,28 @@ public class TriangulationResidualLog {
 			residuals[i] = difference;
 		}
 		return residuals;
+	}
+
+	/**
+	 * @return how a clip's correlation with the seed went: SEED for the seed
+	 * itself, CORRELATED, BELOW_THRESHOLD or NOT_COMPARABLE, or empty if
+	 * correlation was off.
+	 */
+	private static String status(CorrelatedArrivals correlation, PamDataUnit unit) {
+		if (correlation == null) {
+			return "";
+		}
+		if (unit == correlation.getSeed()) {
+			return "SEED";
+		}
+		CorrelatedArrivals.Measurement measurement = correlation.getMeasurement(unit);
+		return measurement == null ? "" : measurement.getStatus().name();
+	}
+
+	/** @return the height of a clip's best correlation peak with the seed, or empty. */
+	private static String peak(CorrelatedArrivals correlation, PamDataUnit unit) {
+		CorrelatedArrivals.Measurement measurement = correlation == null ? null : correlation.getMeasurement(unit);
+		return measurement == null ? "" : number(measurement.getHeight(), 3);
 	}
 
 	private static double hoursDeployed(SonobuoyHistory history, PamDataUnit unit) {

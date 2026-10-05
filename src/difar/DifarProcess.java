@@ -4,10 +4,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.ListIterator;
-import java.util.Map;
 import java.util.function.Predicate;
 
 import javax.swing.SwingWorker;
@@ -1646,20 +1644,18 @@ public class DifarProcess extends PamProcess {
 	
 
 	/**
-	 * Arrival times of a call on other clips, measured by correlating each
-	 * with a seed clip.
+	 * Correlate a seed clip with each of its candidate partners.
 	 * <p>
-	 * Each arrival time is the seed's time plus the delay measured between the
-	 * seed and that clip. The seed is included at its own time if any other
-	 * clip was correlated. Clips that could not be correlated are left out, and
-	 * their detection times are used instead.
+	 * Each partner whose best peak passes the threshold gets an arrival time:
+	 * the seed's time plus the measured delay. The others keep their detection
+	 * times when localised. Every partner's peak height, or the reason it could
+	 * not be correlated, is kept for the triangulation residual log.
 	 * @param seed the clip the delays are measured from.
-	 * @param others clips on other sonobuoys.
-	 * @return arrival times in milliseconds, by clip. Empty if none were
-	 * measured, never null.
+	 * @param others clips on other sonobuoys; the seed itself is skipped.
+	 * @return the results, never null.
 	 */
-	public Map<PamDataUnit, Double> getCorrelatedArrivals(DifarDataUnit seed, List<? extends PamDataUnit> others) {
-		Map<PamDataUnit, Double> arrivals = new HashMap<>();
+	public CorrelatedArrivals getCorrelatedArrivals(DifarDataUnit seed, List<? extends PamDataUnit> others) {
+		CorrelatedArrivals arrivals = new CorrelatedArrivals(seed);
 		PamArray array = ArrayManager.getArrayManager().getCurrentArray();
 		double speedOfSound = array == null ? 1500. : array.getSpeedOfSound();
 		double margin = difarControl.getDifarParameters().maxCorrelatedDelayResidual;
@@ -1670,13 +1666,7 @@ public class DifarProcess extends PamProcess {
 			}
 			DifarDataUnit other = (DifarDataUnit) unit;
 			double maxDelay = getTravelTimeMillis(seedOrigin, other, speedOfSound) / 1000. + margin;
-			Double delay = getClipDelays().getDelaySeconds(seed, other, maxDelay);
-			if (delay != null) {
-				arrivals.put(other, seed.getTimeMilliseconds() + delay * 1000.);
-			}
-		}
-		if (!arrivals.isEmpty()) {
-			arrivals.put(seed, (double) seed.getTimeMilliseconds());
+			arrivals.add(other, getClipDelays().measure(seed, other, maxDelay));
 		}
 		return arrivals;
 	}

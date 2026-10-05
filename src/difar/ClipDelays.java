@@ -4,6 +4,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import difar.CorrelatedArrivals.Measurement;
+import difar.CorrelatedArrivals.Status;
+
 /**
  * Time delays between DIFAR clips of the same call, measured by
  * cross-correlating their spectrograms with {@link ClipCorrelator}.
@@ -14,6 +17,10 @@ import java.util.Map;
  * frequency limits, not on the bearing chosen in the DIFARGram, so matching a
  * clip again after a click on the DIFARGram finds its delays in the cache and
  * does not correlate again.
+ * <p>
+ * The best peak is kept whatever its height, and the threshold is applied
+ * afterwards, so the height of a peak that fell short can be reported, and a
+ * new threshold needs no new correlation.
  * <p>
  * The demultiplexed audio is taken to start at the clip's time. That holds
  * for the AMMC demultiplexer. The Greeneridge demultiplexer trims audio where
@@ -36,8 +43,8 @@ public class ClipDelays {
 
 	private final Map<String, double[][]> spectrograms = lru(MAX_SPECTROGRAMS);
 
-	/** Delay in seconds for each pair, or NaN where no peak passed the threshold. */
-	private final Map<String, Double> delays = lru(MAX_DELAYS);
+	/** The best peak for each pair, whatever its height. */
+	private final Map<String, Measurement> delays = lru(MAX_DELAYS);
 
 	private ClipCorrelator correlator;
 
@@ -47,6 +54,10 @@ public class ClipDelays {
 	private int correlated, fromCache, noPeak, noAudio;
 	private long correlationNanos;
 
+	/** Sum of the heights of the peaks that passed the threshold, for the summary. */
+	private double passedHeights;
+	private int passed;
+
 	/**
 	 * @param difarControl the DIFAR module, for its settings and FFT sizes.
 	 */
@@ -55,45 +66,61 @@ public class ClipDelays {
 	}
 
 	/**
-	 * The delay of a call from one clip to another: its arrival time on the
-	 * other clip minus its arrival time on the first.
-	 * @param first the first clip, normally the one being matched.
+	 * Correlate a call on one clip with another: the delay is its arrival
+	 * time on the other clip minus its arrival time on the first.
+	 * @param first the first clip, normally the seed being matched.
 	 * @param other a clip on another sonobuoy that may hold the same call.
 	 * @param maxDelaySeconds largest delay possible between the two
 	 * sonobuoys, in seconds.
-	 * @return the delay of the highest correlation peak, in seconds, or null
-	 * if either clip has no audio, the clips cannot be compared, or no peak
-	 * passed the threshold.
+	 * @return how the correlation went: the best peak's height and delay, and
+	 * whether it passed the threshold. Never null.
 	 */
-	public synchronized Double getDelaySeconds(DifarDataUnit first, DifarDataUnit other, double maxDelaySeconds) {
+	public synchronized Measurement measure(DifarDataUnit first, DifarDataUnit other, double maxDelaySeconds) {
 		DifarParameters params = difarControl.getDifarParameters();
 		checkSettings(params);
+		Measurement measurement = correlate(first, other, maxDelaySeconds);
+		if (measurement.getStatus() == Status.NOT_COMPARABLE) {
+			noAudio++;
+			return measurement;
+		}
+		if (Double.isNaN(measurement.getHeight()) || measurement.getHeight() < params.correlationThreshold) {
+			noPeak++;
+			return new Measurement(Status.BELOW_THRESHOLD, measurement.getHeight(), measurement.getDelaySeconds());
+		}
+		passed++;
+		passedHeights += measurement.getHeight();
+		return new Measurement(Status.CORRELATED, measurement.getHeight(), measurement.getDelaySeconds());
+	}
+
+	/**
+	 * @return the best peak between two clips, from the cache if it is there,
+	 * with status CORRELATED whatever its height, or NOT_COMPARABLE.
+	 */
+	private Measurement correlate(DifarDataUnit first, DifarDataUnit other, double maxDelaySeconds) {
+		Measurement notComparable = new Measurement(Status.NOT_COMPARABLE, Double.NaN, Double.NaN);
 		float sampleRate = first.getDisplaySampleRate();
 		int fftLength = difarControl.getDifarProcess().getDisplayFFTLength(first);
 		int hop = difarControl.getDifarProcess().getDisplayFFTHop(first);
 		if (sampleRate <= 0 || other.getDisplaySampleRate() != sampleRate
 				|| difarControl.getDifarProcess().getDisplayFFTLength(other) != fftLength
 				|| difarControl.getDifarProcess().getDisplayFFTHop(other) != hop) {
-			noAudio++;
-			return null;
+			return notComparable;
 		}
 		int[] bins = binRange(first.getFrequency(), other.getFrequency(), sampleRate, fftLength);
 		if (bins == null) {
-			noAudio++;
-			return null;
+			return notComparable;
 		}
 		String key = String.format("%d:%d:%d:%d:%d:%d:%.3f", first.getUID(), first.getTimeMilliseconds(),
 				other.getUID(), other.getTimeMilliseconds(), bins[0], bins[1], maxDelaySeconds);
-		Double cached = delays.get(key);
+		Measurement cached = delays.get(key);
 		if (cached != null) {
 			fromCache++;
-			return cached.isNaN() ? null : cached;
+			return cached;
 		}
 		double[][] specA = getSpectrogram(first, fftLength, hop);
 		double[][] specB = getSpectrogram(other, fftLength, hop);
 		if (specA == null || specB == null) {
-			noAudio++;
-			return null;
+			return notComparable;
 		}
 		long start = System.nanoTime();
 		double offsetSeconds = (other.getTimeMilliseconds() - first.getTimeMilliseconds()) / 1000.;
@@ -101,12 +128,10 @@ public class ClipDelays {
 				offsetSeconds, bins, maxDelaySeconds);
 		correlationNanos += System.nanoTime() - start;
 		correlated++;
-		Double delay = peaks.isEmpty() ? null : peaks.get(0).getDelaySeconds();
-		if (delay == null) {
-			noPeak++;
-		}
-		delays.put(key, delay == null ? Double.NaN : delay);
-		return delay;
+		Measurement measurement = peaks.isEmpty() ? new Measurement(Status.CORRELATED, Double.NaN, Double.NaN)
+				: new Measurement(Status.CORRELATED, peaks.get(0).getHeight(), peaks.get(0).getDelaySeconds());
+		delays.put(key, measurement);
+		return measurement;
 	}
 
 	/**
@@ -116,12 +141,15 @@ public class ClipDelays {
 	public synchronized String takeSummary() {
 		String summary = null;
 		if (correlated + fromCache + noAudio > 0) {
-			summary = String.format("DIFAR: correlated %d pairs of clips in %.1f s; %d had no peak above the threshold, "
-					+ "%d could not be correlated (no audio or different FFT settings), %d were already known",
-					correlated, correlationNanos / 1e9, noPeak, noAudio, fromCache);
+			summary = String.format("DIFAR: %d pairs of clips looked up (%d correlated in %.1f s, %d from the cache): "
+					+ "%d passed the threshold, with a mean peak of %.2f; %d had no peak above it; "
+					+ "%d could not be correlated (no audio, or different FFT settings or bands)",
+					passed + noPeak + noAudio, correlated, correlationNanos / 1e9, fromCache,
+					passed, passed > 0 ? passedHeights / passed : Double.NaN, noPeak, noAudio);
 		}
-		correlated = fromCache = noPeak = noAudio = 0;
+		correlated = fromCache = noPeak = noAudio = passed = 0;
 		correlationNanos = 0;
+		passedHeights = 0;
 		return summary;
 	}
 
@@ -134,12 +162,13 @@ public class ClipDelays {
 		delays.clear();
 	}
 
-	/** Make a new correlator, and forget the delays, if the settings changed. */
+	/** Make a new correlator, and forget the delays, if the correlation settings changed. */
 	private void checkSettings(DifarParameters params) {
-		String key = params.correlationThreshold + ":" + params.correlationSmoothing + ":"
-				+ params.correlationMinSeparation + ":" + params.correlationMinOverlap;
+		String key = params.correlationSmoothing + ":" + params.correlationMinSeparation + ":"
+				+ params.correlationMinOverlap;
 		if (!key.equals(settingsKey)) {
-			correlator = new ClipCorrelator(params.correlationThreshold, 1, params.correlationMinOverlap,
+			// every peak is kept here; the threshold is applied in measure()
+			correlator = new ClipCorrelator(-1, 1, params.correlationMinOverlap,
 					params.correlationSmoothing, params.correlationMinSeparation);
 			delays.clear();
 			settingsKey = key;

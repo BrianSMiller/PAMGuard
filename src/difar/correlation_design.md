@@ -100,8 +100,13 @@ of each clip's band is noise. The threshold has to be set from real data.
   Smoothing, minimum separation and minimum overlap are settings in `DifarParameters`, not shown.
 - **The match selector** shows how many of each group's other clips were correlated, and says
   when a fitting group holds a clip already in another triangulation.
-- **The rematch summary** reports pairs correlated, time spent, pairs with no peak, pairs that
-  could not be correlated, and pairs found in the cache.
+- **The rematch summary** reports pairs looked up, how many were correlated and how long that
+  took, how many came from the cache, how many passed the threshold and their mean peak height,
+  how many fell below it, and how many could not be correlated.
+- **The best peak is kept whatever its height,** and the threshold applied afterwards, so the
+  triangulation residual CSV can report the peak height of every candidate in a triangulation,
+  with whether it passed, fell below the threshold, or could not be correlated, and which clip was
+  the seed. A new threshold then needs no new correlation.
 - **Help pages:** the triangulation page and the localisation settings.
 
 Not yet built:

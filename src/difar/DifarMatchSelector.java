@@ -50,15 +50,26 @@ public class DifarMatchSelector {
 
 		private final DIFARTargetMotionInformation info;
 
+		private final CorrelatedArrivals correlation;
+
 		private Match(List<PamDataUnit> units, TargetMotionResult result,
 				DifarLocalisationResiduals residuals, String rejectReason, int correlated,
-				DIFARTargetMotionInformation info) {
+				DIFARTargetMotionInformation info, CorrelatedArrivals correlation) {
 			this.units = units;
 			this.result = result;
 			this.residuals = residuals;
 			this.rejectReason = rejectReason;
 			this.correlated = correlated;
 			this.info = info;
+			this.correlation = correlation;
+		}
+
+		/**
+		 * @return the results of correlating the seed with its candidates,
+		 * with each candidate's peak height, or null if correlation was off.
+		 */
+		public CorrelatedArrivals getCorrelation() {
+			return correlation;
 		}
 
 		/**
@@ -132,8 +143,8 @@ public class DifarMatchSelector {
 
 	private final Simplex2D simplex = new Simplex2D();
 
-	/** Arrival times measured by correlation, in milliseconds, or null. */
-	private Map<PamDataUnit, Double> arrivalMillis;
+	/** Results of correlating the seed with its candidates, or null. */
+	private CorrelatedArrivals correlation;
 
 	private double correlationErrorSeconds;
 
@@ -157,16 +168,16 @@ public class DifarMatchSelector {
 	/**
 	 * Use arrival times measured by correlation with the seed, where there are
 	 * any, in place of detection times.
-	 * @param arrivalMillis arrival time in milliseconds of each detection that
-	 * has one, including the seed at its own time. Null for none.
+	 * @param correlation the results of correlating the seed with its
+	 * candidates. Null for none.
 	 * @param correlationErrorSeconds timing error of a delay measured by
 	 * correlation, in seconds.
 	 * @param maxCorrelatedDelayResidual largest acceptable error of a delay
 	 * measured by correlation, in seconds.
 	 */
-	public void setArrivalTimes(Map<PamDataUnit, Double> arrivalMillis, double correlationErrorSeconds,
+	public void setArrivalTimes(CorrelatedArrivals correlation, double correlationErrorSeconds,
 			double maxCorrelatedDelayResidual) {
-		this.arrivalMillis = arrivalMillis;
+		this.correlation = correlation;
 		this.correlationErrorSeconds = correlationErrorSeconds;
 		this.maxCorrelatedDelayResidual = maxCorrelatedDelayResidual;
 	}
@@ -322,7 +333,8 @@ public class DifarMatchSelector {
 		DIFARTargetMotionInformation info = new DIFARTargetMotionInformation(difarProcess, units);
 		info.setTimingErrorSeconds(timingErrorSeconds);
 		int correlated = 0;
-		if (arrivalMillis != null) {
+		if (correlation != null) {
+			Map<PamDataUnit, Double> arrivalMillis = correlation.getArrivalMillis();
 			info.setArrivalTimes(arrivalMillis, correlationErrorSeconds);
 			for (int i = 1; i < units.size(); i++) {
 				if (arrivalMillis.containsKey(units.get(i))) {
@@ -338,7 +350,7 @@ public class DifarMatchSelector {
 		}
 		DifarLocalisationResiduals residuals =
 				DifarLocalisationResiduals.calculate(info, results[0].getLatLong());
-		return new Match(units, results[0], residuals, rejectReason(residuals), correlated, info);
+		return new Match(units, results[0], residuals, rejectReason(residuals), correlated, info, correlation);
 	}
 
 	/**
