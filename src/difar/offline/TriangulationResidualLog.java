@@ -11,6 +11,8 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 import Localiser.algorithms.genericLocaliser.Chi2TimeDelays;
+import GPS.GpsData;
+import PamUtils.LatLong;
 import PamUtils.PamCalendar;
 import PamUtils.PamUtils;
 import PamguardMVC.PamDataUnit;
@@ -34,18 +36,21 @@ import pamMaths.PamVector;
  * deployed, and the bearing residual at each end. When correlation is on, it
  * also gives how each clip's correlation with the seed went: the height of its
  * best peak, and whether that passed the threshold, fell below it, or could not
- * be measured. Plotted against separation
+ * be measured. Each row also gives the triangulation's position and each
+ * sonobuoy's position, so the residuals can be tested against models of
+ * sonobuoy position error. Plotted against separation
  * and against time since deployment, the residuals show how much of the timing
  * error comes from the measurement, and how much from sonobuoys that are not
  * where their records say, for example because they have drifted.
  */
 public class TriangulationResidualLog {
 
-	private static final String HEADER = "TriangulationUID,UTC,Species,Sonobuoys,Chi2PerDof,"
+	private static final String HEADER = "TriangulationUID,UTC,Species,Sonobuoys,Chi2PerDof,Latitude,Longitude,"
 			+ "ChannelA,ChannelB,ClipUIDA,ClipUIDB,SonobuoyA,SonobuoyB,"
 			+ "SeparationM,TravelTimeS,MeasuredDelayS,PredictedDelayS,ResidualS,DelayErrorS,Correlated,"
 			+ "HoursDeployedA,HoursDeployedB,BearingResidualADeg,BearingResidualBDeg,"
-			+ "SeedClipUID,CorrelationA,CorrelationB,PeakA,PeakB";
+			+ "SeedClipUID,CorrelationA,CorrelationB,PeakA,PeakB,"
+			+ "LatitudeA,LongitudeA,LatitudeB,LongitudeB";
 
 	private final List<String> rows = new ArrayList<>();
 
@@ -83,9 +88,11 @@ public class TriangulationResidualLog {
 		String seedUID = correlation == null ? "" : Long.toString(correlation.getSeed().getUID());
 
 		String species = units.get(0) instanceof DifarDataUnit ? ((DifarDataUnit) units.get(0)).getSpeciesCode() : null;
-		String common = String.format(Locale.ROOT, "%d,%s,%s,%d,%s", crossing.getUID(),
+		LatLong where = match.getResult().getLatLong();
+		String common = String.format(Locale.ROOT, "%d,%s,%s,%d,%s,%s,%s", crossing.getUID(),
 				PamCalendar.formatDBDateTime(crossing.getTimeMilliseconds(), true), text(species), units.size(),
-				number(match.getChi2PerDegreeOfFreedom(), 3));
+				number(match.getChi2PerDegreeOfFreedom(), 3), number(where.getLatitude(), 6),
+				number(where.getLongitude(), 6));
 
 		ArrayList<Integer> first = PamUtils.indexM1(units.size());
 		ArrayList<Integer> second = PamUtils.indexM2(units.size());
@@ -98,7 +105,7 @@ public class TriangulationResidualLog {
 			double[] pb = positions.get(b);
 			double separation = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]);
 			double residual = predicted == null || j >= predicted.size() ? Double.NaN : measured.get(j) - predicted.get(j);
-			rows.add(String.format(Locale.ROOT, "%s,%d,%d,%d,%d,%s,%s,%.1f,%s,%s,%s,%s,%s,%b,%s,%s,%s,%s,%s,%s,%s,%s,%s",
+			rows.add(String.format(Locale.ROOT, "%s,%d,%d,%d,%d,%s,%s,%.1f,%s,%s,%s,%s,%s,%b,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
 					common, channel(unitA), channel(unitB), unitA.getUID(), unitB.getUID(),
 					text(name(history, unitA)), text(name(history, unitB)), separation,
 					number(separation / speedOfSound, 4), number(measured.get(j), 4),
@@ -108,7 +115,8 @@ public class TriangulationResidualLog {
 					number(hoursDeployed(history, unitA), 3), number(hoursDeployed(history, unitB), 3),
 					number(bearingResiduals[a], 2), number(bearingResiduals[b], 2),
 					seedUID, status(correlation, unitA), status(correlation, unitB),
-					peak(correlation, unitA), peak(correlation, unitB)));
+					peak(correlation, unitA), peak(correlation, unitB),
+					position(unitA), position(unitB)));
 		}
 		triangulations++;
 	}
@@ -205,6 +213,18 @@ public class TriangulationResidualLog {
 	private static String peak(CorrelatedArrivals correlation, PamDataUnit unit) {
 		CorrelatedArrivals.Measurement measurement = correlation == null ? null : correlation.getMeasurement(unit);
 		return measurement == null ? "" : number(measurement.getHeight(), 3);
+	}
+
+	/**
+	 * @return a clip's sonobuoy position as "latitude,longitude", the one the
+	 * localisation used, or two empty fields if it has none.
+	 */
+	private static String position(PamDataUnit unit) {
+		GpsData origin = unit.getOriginLatLong(false);
+		if (origin == null) {
+			return ",";
+		}
+		return number(origin.getLatitude(), 6) + "," + number(origin.getLongitude(), 6);
 	}
 
 	private static double hoursDeployed(SonobuoyHistory history, PamDataUnit unit) {

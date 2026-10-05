@@ -1733,6 +1733,10 @@ public class DifarProcess extends PamProcess {
 				if (!isSameSpecies(difarDataUnit, otherUnit)) {
 					continue;
 				}
+				if (otherUnit.getOriginLatLong(false) == null) {
+					// no buoy with a known position was in force, so it cannot be located
+					continue;
+				}
 				thatStart = otherUnit.getTimeMilliseconds();
 				thatEnd = thatStart + (long) (otherUnit.getDurationInSeconds() * 1000.);
 				long travelMillis = getTravelTimeMillis(thisOrigin, otherUnit, speedOfSound);
