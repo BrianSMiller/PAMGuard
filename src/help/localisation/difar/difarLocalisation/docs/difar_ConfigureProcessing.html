@@ -207,6 +207,14 @@ Setting up a filter for obtaining calibrated intensity measurements from sonobuo
 
 <p><b>Max candidates per buoy:</b> The number of DIFAR clips on each other sonobuoy that are considered as matches for one DIFAR clip. The DIFAR clips closest in time and frequency are kept. Increase this value when many animals are calling at once.</p>
 
+<p><b>Time delays by correlation:</b> Measure the arrival time difference between DIFAR clips by cross-correlating their spectrograms, rather than from their start times. See <a href="difar_CrossingBearings.html#Crossings">Triangulation</a>. The spectrograms use the FFT length and hop of the species settings. The correlation is smoothed over 64 ms before its peak is found.</p>
+
+<p><b>Correlation threshold:</b> The smallest correlation peak, between 0 and 1, accepted as an arrival time difference. Below it, the start times of the DIFAR clips are used. Peaks are low, since most of a DIFAR clip's band is noise; a clear call typically gives 0.1 to 0.2. The default is 0.1.</p>
+
+<p><b>Correlation timing error (s):</b> The accuracy of an arrival time difference measured by correlation. It sets the weight these differences are given when a triangulation is calculated. The default is 0.05 s.</p>
+
+<p><b>Max correlated timing residual (s):</b> The largest difference allowed between an arrival time difference measured by correlation and the one predicted by the triangulation. Arrival time differences from start times are still held to the Max timing residual. The default is 0.5 s.</p>
+
 <p><b>On-buoy radius (m):</b> A triangulation within this distance of one of its own sonobuoys is flagged as <a href="difar_CrossingBearings.html#Quality">on that sonobuoy</a>, and its errors are set to this radius. The default is 500 m. DIFAR sonobuoys are not precision instruments: compass calibrations vary, deployment locations are approximate, and sonobuoys drift after deployment. A generous radius is therefore recommended.</p>
 
 <!-- Screenshot: the Advanced tab of the DIFAR settings, showing the Localisation panel. -->

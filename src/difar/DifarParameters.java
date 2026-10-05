@@ -72,6 +72,48 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 	public double maxTimeDelayResidual = 6.0;
 
 	/**
+	 * Measure time delays between DIFAR clips by cross-correlating their
+	 * spectrograms, rather than from the clips' start times.
+	 */
+	public boolean useCorrelation = false;
+
+	/**
+	 * Smallest correlation peak, between 0 and 1, accepted as a time delay.
+	 * Below it, the delay comes from the clips' start times.
+	 */
+	public double correlationThreshold = 0.1;
+
+	/**
+	 * Timing error of a delay measured by correlation, in seconds. It sets the
+	 * weight those delays carry in a localisation.
+	 */
+	public double correlationTimingError = 0.05;
+
+	/**
+	 * Largest acceptable difference, in seconds, between a delay measured by
+	 * correlation and the one the localised position would produce.
+	 */
+	public double maxCorrelatedDelayResidual = 0.5;
+
+	/**
+	 * Half width, in seconds, of the triangular window the correlation is
+	 * smoothed with before its peaks are found. Not shown in the settings.
+	 */
+	public double correlationSmoothing = 0.064;
+
+	/**
+	 * Closest two correlation peaks may be, in seconds. Not shown in the
+	 * settings; only the highest peak is used for now.
+	 */
+	public double correlationMinSeparation = 0.15;
+
+	/**
+	 * Shortest overlap of two clips at which a delay is considered, as a
+	 * fraction of the shorter clip. Not shown in the settings.
+	 */
+	public double correlationMinOverlap = 0.5;
+
+	/**
 	 * Largest acceptable difference, in degrees, between a measured bearing and
 	 * the bearing to the localised position.
 	 */
@@ -467,6 +509,24 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 			}
 			if (ndp.bearingError <= 0) {
 				ndp.bearingError = 5.0;
+			}
+			if (ndp.correlationThreshold <= 0) {
+				ndp.correlationThreshold = 0.1;
+			}
+			if (ndp.correlationTimingError <= 0) {
+				ndp.correlationTimingError = 0.05;
+			}
+			if (ndp.maxCorrelatedDelayResidual <= 0) {
+				ndp.maxCorrelatedDelayResidual = 0.5;
+			}
+			if (ndp.correlationSmoothing <= 0) {
+				ndp.correlationSmoothing = 0.064;
+			}
+			if (ndp.correlationMinSeparation <= 0) {
+				ndp.correlationMinSeparation = 0.15;
+			}
+			if (ndp.correlationMinOverlap <= 0) {
+				ndp.correlationMinOverlap = 0.5;
 			}
 			return ndp;
 		} catch (CloneNotSupportedException e) {

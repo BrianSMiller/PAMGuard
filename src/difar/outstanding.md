@@ -379,8 +379,53 @@ items below are about making fewer of them necessary.
 - Tracked groups are old and unused. Drop them, or replace them with a general tracking tool.
 - The simulated sonobuoy test document lives in the data folder. Consider moving it into the repo.
 
+## Timing errors and sonobuoy positions
+
+From the DCLDE 2024 rematch, 5 October 2026. Both timing limits are absolute times, and neither
+suits every dataset. The max timing residual of 6 s came from the median sonobuoy separation of the
+2019 voyage; the DCLDE sonobuoys are much closer. The max correlated timing residual of 0.5 s was a
+placeholder with no error budget behind it. A delay's error has three parts: how well it is
+measured (correlation: tens of ms; start times: about a second), where each sonobuoy is (100 m is
+0.07 s), and drift since deployment (0.5 knots for 3 hours is 2.8 km, nearly 2 s). Correlation
+cannot see drift: a clean peak gives a precise but biased delay.
+
+1. **Measure first.** The rematch writes every triangulation's residuals, one row per delay, to
+   `<database>_triangulation_residuals_<time>.csv` beside the database: separation, measured and
+   predicted delay, residual, whether correlated, hours since each sonobuoy's deployment, and the
+   bearing residual at each end. Built. Use it to see whether drift dominates, and to choose the
+   settings below.
+2. **An error for each delay, and limits in units of it.** sigma_ij^2 = sigma_t,i^2 + sigma_t,j^2 +
+   (sigma_p,i^2 + sigma_p,j^2) / c^2, where sigma_t is the timing error (detection or correlation)
+   and sigma_p a sonobuoy's position error, growing with time since deployment: sigma_p = sigma_p0 +
+   drift rate x hours deployed. Reject a fit when any residual exceeds k sigma, k about 3; the same
+   for bearings. The candidate window in `getMatchingUnits` uses the same sigma instead of borrowing
+   the residual limit. Two physical settings, position error and drift rate, replace two arbitrary
+   limits, and the rule works for close sonobuoys, old sonobuoys and correlated delays alike.
+3. **Separation as a diagnostic.** Where the travel time between two sonobuoys is under about
+   3 sigma, timing cannot tell a right match from a wrong one; say so in the console.
+4. **Later: a model of sonobuoy positions.** A Kalman or particle filter with each sonobuoy's
+   position, velocity and compass correction as its state, updated from the residuals of confident
+   triangulations and from the research vessel as a source of known position. Matching then uses
+   its predicted positions and their covariances as sigma_p, and matching and the filter can
+   alternate, EM style. The state-space idea from September, now with a defined place to plug in.
+
 ## Core issues for Doug
 
+- Settings were saved and loaded with quadratic string building. `Ascii6Bit.createStringData()`
+  added one character at a time with `+=`, and `LogSettings` joined stored rows the same way, so
+  each addition recopied everything. Closing the Viewer on the DCLDE 2024 database took about ten
+  minutes and looked like a hang. Fixed with `StringBuilder` on branch `settings-string-building`:
+  output identical, 3 MB of settings now encodes in 0.13 s. Test: `test/PamUtils/Ascii6BitTest`.
+- The streamer import added the current array to the Array Manager's list once per row imported,
+  and `ArrayManager.addArray` did not check for repeats. In memory these were references to one
+  array, but settings are cloned array by array when they load, so each became a full copy. The
+  DCLDE 2024 database held 150 arrays (three imports of 49 rows, each a 32-streamer array), 2.3 MB
+  of settings. Fixed on branch `streamer-import-duplicates`: the import no longer adds the array,
+  and `addArray` ignores an array already listed. Existing copies stay until deleted.
+- `Correlations.getCorrelation()` is off by about 14% of the peak against a direct sum, even with
+  zero padding. The likely cause is how it fills the negative frequencies (`fftLength-i-1` rather
+  than `fftLength-i`) and the packed DC and Nyquist terms. The route inside `getDelay()` is
+  accurate. DIFAR's `ClipCorrelator` uses that route instead.
 - The audio file loader stops at a gap between files longer than a second (`WavAudioFile`, "don't
   carry on if there is a file gap"). A spectrogram window that starts before a gap stays blank after
   it, though audio follows. The 2013 pilot has eight gaps, from recorder restarts; at 22:55 a window

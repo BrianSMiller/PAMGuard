@@ -2,6 +2,7 @@ package difar;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import PamguardMVC.PamDataUnit;
 import difar.targetmotion.Simplex2D;
@@ -45,12 +46,35 @@ public class DifarMatchSelector {
 
 		private final String rejectReason;
 
+		private final int correlated;
+
+		private final DIFARTargetMotionInformation info;
+
 		private Match(List<PamDataUnit> units, TargetMotionResult result,
-				DifarLocalisationResiduals residuals, String rejectReason) {
+				DifarLocalisationResiduals residuals, String rejectReason, int correlated,
+				DIFARTargetMotionInformation info) {
 			this.units = units;
 			this.result = result;
 			this.residuals = residuals;
 			this.rejectReason = rejectReason;
+			this.correlated = correlated;
+			this.info = info;
+		}
+
+		/**
+		 * @return the measurements the group was fitted to: buoy positions,
+		 * bearings, and time delays with their errors.
+		 */
+		public DIFARTargetMotionInformation getInfo() {
+			return info;
+		}
+
+		/**
+		 * @return how many detections of this group, besides the seed, have
+		 * an arrival time measured by correlation with the seed.
+		 */
+		public int getCorrelatedCount() {
+			return correlated;
 		}
 
 		/**
@@ -108,6 +132,13 @@ public class DifarMatchSelector {
 
 	private final Simplex2D simplex = new Simplex2D();
 
+	/** Arrival times measured by correlation, in milliseconds, or null. */
+	private Map<PamDataUnit, Double> arrivalMillis;
+
+	private double correlationErrorSeconds;
+
+	private double maxCorrelatedDelayResidual = Double.NaN;
+
 	/**
 	 * @param difarProcess the process the localisations belong to. May be null
 	 * outside a running configuration.
@@ -121,6 +152,23 @@ public class DifarMatchSelector {
 		this.timingErrorSeconds = timingErrorSeconds;
 		this.maxBearingResidual = maxBearingResidual;
 		this.maxTimeDelayResidual = maxTimeDelayResidual;
+	}
+
+	/**
+	 * Use arrival times measured by correlation with the seed, where there are
+	 * any, in place of detection times.
+	 * @param arrivalMillis arrival time in milliseconds of each detection that
+	 * has one, including the seed at its own time. Null for none.
+	 * @param correlationErrorSeconds timing error of a delay measured by
+	 * correlation, in seconds.
+	 * @param maxCorrelatedDelayResidual largest acceptable error of a delay
+	 * measured by correlation, in seconds.
+	 */
+	public void setArrivalTimes(Map<PamDataUnit, Double> arrivalMillis, double correlationErrorSeconds,
+			double maxCorrelatedDelayResidual) {
+		this.arrivalMillis = arrivalMillis;
+		this.correlationErrorSeconds = correlationErrorSeconds;
+		this.maxCorrelatedDelayResidual = maxCorrelatedDelayResidual;
 	}
 
 	/**
@@ -273,6 +321,15 @@ public class DifarMatchSelector {
 		ArrayList<PamDataUnit> units = new ArrayList<>(group);
 		DIFARTargetMotionInformation info = new DIFARTargetMotionInformation(difarProcess, units);
 		info.setTimingErrorSeconds(timingErrorSeconds);
+		int correlated = 0;
+		if (arrivalMillis != null) {
+			info.setArrivalTimes(arrivalMillis, correlationErrorSeconds);
+			for (int i = 1; i < units.size(); i++) {
+				if (arrivalMillis.containsKey(units.get(i))) {
+					correlated++;
+				}
+			}
+		}
 		simplex.setStartPoint(info.getMeanPosition());
 		TargetMotionResult[] results = simplex.runModel(info);
 		if (results == null || results.length != 1 || results[0] == null
@@ -281,7 +338,7 @@ public class DifarMatchSelector {
 		}
 		DifarLocalisationResiduals residuals =
 				DifarLocalisationResiduals.calculate(info, results[0].getLatLong());
-		return new Match(units, results[0], residuals, rejectReason(residuals));
+		return new Match(units, results[0], residuals, rejectReason(residuals), correlated, info);
 	}
 
 	/**
@@ -294,7 +351,20 @@ public class DifarMatchSelector {
 		if (!Double.isNaN(bearing) && bearing > maxBearingResidual) {
 			return String.format("bearing out by %.1f deg, limit %.1f", bearing, maxBearingResidual);
 		}
-		double timing = residuals.getMaxTimeDelayErrorSeconds();
+		if (Double.isNaN(maxCorrelatedDelayResidual)) {
+			// no correlation: every delay is held to the one limit
+			double timing = residuals.getMaxTimeDelayErrorSeconds();
+			if (!Double.isNaN(timing) && timing > maxTimeDelayResidual) {
+				return String.format("timing out by %.1f s, limit %.1f", timing, maxTimeDelayResidual);
+			}
+			return null;
+		}
+		double correlatedTiming = residuals.getMaxCorrelatedDelayErrorSeconds();
+		if (!Double.isNaN(correlatedTiming) && correlatedTiming > maxCorrelatedDelayResidual) {
+			return String.format("correlated timing out by %.2f s, limit %.2f", correlatedTiming,
+					maxCorrelatedDelayResidual);
+		}
+		double timing = residuals.getMaxDetectionDelayErrorSeconds();
 		if (!Double.isNaN(timing) && timing > maxTimeDelayResidual) {
 			return String.format("timing out by %.1f s, limit %.1f", timing, maxTimeDelayResidual);
 		}

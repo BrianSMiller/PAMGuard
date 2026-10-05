@@ -4,8 +4,10 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
 import java.util.function.Predicate;
 
 import javax.swing.SwingWorker;
@@ -68,6 +70,9 @@ public class DifarProcess extends PamProcess {
 
 	/** Candidate matches for recent detections, for the matching display. */
 	private DifarMatchLog matchLog = new DifarMatchLog();
+
+	/** Time delays between clips measured by correlation, cached. */
+	private ClipDelays clipDelays;
 
 	private DifarControl difarControl;
 
@@ -1551,6 +1556,14 @@ public class DifarProcess extends PamProcess {
 
 		DifarMatchSelector selector = new DifarMatchSelector(this,
 				params.detectionTimingError, params.maxBearingResidual, params.maxTimeDelayResidual);
+		if (params.useCorrelation) {
+			List<PamDataUnit> all = new ArrayList<>();
+			for (List<PamDataUnit> buoyCandidates : candidatesByBuoy) {
+				all.addAll(buoyCandidates);
+			}
+			selector.setArrivalTimes(getCorrelatedArrivals(difarDataUnit, all),
+					params.correlationTimingError, params.maxCorrelatedDelayResidual);
+		}
 		List<DifarMatchSelector.Match> candidates = selector.selectAll(difarDataUnit,
 				new ArrayList<List<PamDataUnit>>(candidatesByBuoy));
 		matchLog.put(difarDataUnit, candidates);
@@ -1631,6 +1644,52 @@ public class DifarProcess extends PamProcess {
 		return residuals.isWithin(params.maxBearingResidual, params.maxTimeDelayResidual);
 	}
 	
+
+	/**
+	 * Arrival times of a call on other clips, measured by correlating each
+	 * with a seed clip.
+	 * <p>
+	 * Each arrival time is the seed's time plus the delay measured between the
+	 * seed and that clip. The seed is included at its own time if any other
+	 * clip was correlated. Clips that could not be correlated are left out, and
+	 * their detection times are used instead.
+	 * @param seed the clip the delays are measured from.
+	 * @param others clips on other sonobuoys.
+	 * @return arrival times in milliseconds, by clip. Empty if none were
+	 * measured, never null.
+	 */
+	public Map<PamDataUnit, Double> getCorrelatedArrivals(DifarDataUnit seed, List<? extends PamDataUnit> others) {
+		Map<PamDataUnit, Double> arrivals = new HashMap<>();
+		PamArray array = ArrayManager.getArrayManager().getCurrentArray();
+		double speedOfSound = array == null ? 1500. : array.getSpeedOfSound();
+		double margin = difarControl.getDifarParameters().maxCorrelatedDelayResidual;
+		GpsData seedOrigin = seed.getOriginLatLong(false);
+		for (PamDataUnit unit : others) {
+			if (!(unit instanceof DifarDataUnit) || unit == seed) {
+				continue;
+			}
+			DifarDataUnit other = (DifarDataUnit) unit;
+			double maxDelay = getTravelTimeMillis(seedOrigin, other, speedOfSound) / 1000. + margin;
+			Double delay = getClipDelays().getDelaySeconds(seed, other, maxDelay);
+			if (delay != null) {
+				arrivals.put(other, seed.getTimeMilliseconds() + delay * 1000.);
+			}
+		}
+		if (!arrivals.isEmpty()) {
+			arrivals.put(seed, (double) seed.getTimeMilliseconds());
+		}
+		return arrivals;
+	}
+
+	/**
+	 * @return the cache of time delays between clips measured by correlation.
+	 */
+	public synchronized ClipDelays getClipDelays() {
+		if (clipDelays == null) {
+			clipDelays = new ClipDelays(difarControl);
+		}
+		return clipDelays;
+	}
 
 	/**
 	 * @return the candidate matches worked out for recent detections.

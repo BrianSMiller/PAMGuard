@@ -142,6 +142,8 @@ public class DifarParamsDialog extends PamDialog {
 	private JTextField onBuoyRadius;
 	private JTextField detectionTimingError, maxTimeDelayResidual, maxBearingResidual, bearingError,
 			maxCandidatesPerBuoy;
+	private JCheckBox useCorrelation;
+	private JTextField correlationThreshold, correlationTimingError, maxCorrelatedDelayResidual;
 	private SourcePanel calibrationSourcePanel;
 	private JCheckBox loadViewerClips;
 	
@@ -329,8 +331,31 @@ public class DifarParamsDialog extends PamDialog {
 				+ "there are near zero and mean nothing. DIFAR buoys are not precision<br>"
 				+ "instruments, so be generous.</HTML>");
 
+		useCorrelation = new JCheckBox();
+		useCorrelation.setName("Time delays by correlation");
+		useCorrelation.setToolTipText("<HTML>Measure time delays between DIFAR clips by cross-correlating<br>"
+				+ "their spectrograms, rather than from the clips' start times.<br>"
+				+ "Where a pair does not correlate, its start times are used.</HTML>");
+
+		correlationThreshold = new JTextField();
+		correlationThreshold.setName("Correlation threshold");
+		correlationThreshold.setToolTipText("<HTML>Smallest correlation peak, between 0 and 1, accepted as a time delay.<br>"
+				+ "Peaks are low, since most of a clip's band is noise:<br>"
+				+ "a clear call gives around 0.1 to 0.2.</HTML>");
+
+		correlationTimingError = new JTextField();
+		correlationTimingError.setName("Correlation timing error (s)");
+		correlationTimingError.setToolTipText("<HTML>Accuracy of a time delay measured by correlation.<br>"
+				+ "This sets how much weight those delays carry when a position is calculated.</HTML>");
+
+		maxCorrelatedDelayResidual = new JTextField();
+		maxCorrelatedDelayResidual.setName("Max correlated timing residual (s)");
+		maxCorrelatedDelayResidual.setToolTipText("<HTML>Largest difference allowed between a time delay measured by<br>"
+				+ "correlation and the one the calculated position would produce.</HTML>");
+
 		JComponent[] localisation = {bearingError, detectionTimingError, maxTimeDelayResidual, maxBearingResidual,
-				maxCandidatesPerBuoy, onBuoyRadius};
+				maxCandidatesPerBuoy, onBuoyRadius, useCorrelation, correlationThreshold, correlationTimingError,
+				maxCorrelatedDelayResidual};
 		PamPanel localisationPanel = new PamPanel(new GridBagLayout());
 		localisationPanel.setBorder(new TitledBorder("Localisation"));
 		PamPanel.layoutGrid(localisationPanel, localisation);
@@ -346,6 +371,13 @@ public class DifarParamsDialog extends PamDialog {
 		//*************************************************************************
 		
 	}
+	private void setCorrelationFields(DifarParameters params) {
+		useCorrelation.setSelected(params.useCorrelation);
+		correlationThreshold.setText(Double.toString(params.correlationThreshold));
+		correlationTimingError.setText(Double.toString(params.correlationTimingError));
+		maxCorrelatedDelayResidual.setText(Double.toString(params.maxCorrelatedDelayResidual));
+	}
+
 	class PushUp extends JPanel{
 		PushUp(JComponent jComponent){
 			super();
@@ -643,6 +675,7 @@ public class DifarParamsDialog extends PamDialog {
 		maxBearingResidual.setText(new Double(difarParameters.maxBearingResidual).toString());
 		onBuoyRadius.setText(Double.toString(difarParameters.getOnBuoyRadius()));
 		maxCandidatesPerBuoy.setText(new Integer(difarParameters.maxCandidatesPerBuoy).toString());
+		setCorrelationFields(difarParameters);
 
 		secondsToPreceed.setText(new Double(difarParameters.secondsToPreceed).toString());
 		keepRawDataTime.setText(new Integer(difarParameters.keepRawDataTime).toString());
@@ -740,6 +773,24 @@ public class DifarParamsDialog extends PamDialog {
 		}catch(Exception e ){
 
 			return showWarning("Localisation Parameter Problem");
+		}
+		try {
+			double threshold = Double.valueOf(correlationThreshold.getText());
+			double correlationError = Double.valueOf(correlationTimingError.getText());
+			double maxCorrelated = Double.valueOf(maxCorrelatedDelayResidual.getText());
+			if (threshold <= 0 || threshold >= 1) {
+				return showWarning("Correlation threshold must be between 0 and 1");
+			}
+			if (correlationError <= 0 || maxCorrelated <= 0) {
+				return showWarning("Correlation timing settings must be greater than zero");
+			}
+			difarParameters.useCorrelation = useCorrelation.isSelected();
+			difarParameters.correlationThreshold = threshold;
+			difarParameters.correlationTimingError = correlationError;
+			difarParameters.maxCorrelatedDelayResidual = maxCorrelated;
+		}
+		catch (Exception e) {
+			return showWarning("Correlation Parameter Problem");
 		}
 		try{
 			difarParameters.secondsToPreceed = new Double(secondsToPreceed.getText());
@@ -866,6 +917,7 @@ public class DifarParamsDialog extends PamDialog {
 		maxBearingResidual.setText(new Double(newDifarParameters.maxBearingResidual).toString());
 		onBuoyRadius.setText(Double.toString(newDifarParameters.getOnBuoyRadius()));
 		maxCandidatesPerBuoy.setText(new Integer(newDifarParameters.maxCandidatesPerBuoy).toString());
+		setCorrelationFields(newDifarParameters);
 
 		secondsToPreceed.setText(new Double(newDifarParameters.secondsToPreceed).toString());
 		keepRawDataTime.setText(new Integer(newDifarParameters.keepRawDataTime).toString());
