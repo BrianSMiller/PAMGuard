@@ -177,21 +177,7 @@ public class DIFARGram implements DIFARDisplayUnit {
 	}
 
 	private double[] getPlotLimits(DifarDataUnit difarDataUnit) {
-		if (difarControl.getDifarParameters().zoomDifarFrequency) {
-			double[] fRange = difarDataUnit.getFrequency();
-			if (fRange == null) {
-				return new double[]{0., difarDataUnit.getDisplaySampleRate()/2.};
-			}
-			double delt = fRange[1]-fRange[0];
-			double max = fRange[1] + delt/4;
-			double min = fRange[0] - delt/4;
-			max = Math.min(max, difarDataUnit.getDisplaySampleRate()/2.);
-			min = Math.max(0., min);
-			return new double[]{min, max};
-		}
-		else {
-			return new double[]{0., difarDataUnit.getDisplaySampleRate()/2.};
-		}
+		return difarControl.getClipFrequencyLimits(difarDataUnit);
 	}
 
 	public void repaintAll() {
@@ -912,18 +898,4 @@ public class DIFARGram implements DIFARDisplayUnit {
 		}		
 	}
 
-	/**
-	 * Called when the zoom state of the control panel changes. 
-	 * Remake the axes and repaint the images. 
-	 */
-	public void zoomFrequency() {
-		DifarDataUnit difarDataUnit = difarControl.getCurrentDemuxedUnit();
-		if (difarDataUnit == null) {
-			return;
-		}
-		double[] fRange = getPlotLimits(difarDataUnit);
-		freqAxis.setRange(fRange[0], fRange[1]);
-		freqAxis2.setRange(fRange[0], fRange[1]);
-		repaintAll();
-	}
 }

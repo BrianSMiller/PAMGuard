@@ -192,6 +192,10 @@ public class DifarMatchPanel extends PamPanel implements DIFARDisplayUnit {
 			// the clip has left the DIFARgram, so its matches no longer apply
 			showUnit(null);
 			break;
+		case DIFARMessage.DisplaySettingsChange:
+			// colours, amplitude range or frequency zoom
+			clipStrip.displaySettingsChanged();
+			break;
 		}
 		return 0;
 	}

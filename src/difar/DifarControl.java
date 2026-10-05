@@ -715,6 +715,27 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 	}
 
 	/**
+	 * The frequency range to show a DIFAR clip over, in the DIFARGram and in
+	 * the triangulation match selector.
+	 * <p>
+	 * With "Zoom freq" ticked, the range is the DIFAR clip's own frequency
+	 * limits, widened by a quarter of their bandwidth at each end and kept
+	 * within zero and the Nyquist frequency. Otherwise, or if the DIFAR clip has
+	 * no frequency limits, it is zero to the Nyquist frequency.
+	 * @param difarDataUnit the DIFAR clip.
+	 * @return the lowest and highest frequency to show, in Hz.
+	 */
+	public double[] getClipFrequencyLimits(DifarDataUnit difarDataUnit) {
+		double nyquist = difarDataUnit.getDisplaySampleRate() / 2.;
+		double[] fRange = difarDataUnit.getFrequency();
+		if (!getDifarParameters().zoomDifarFrequency || fRange == null) {
+			return new double[] {0., nyquist};
+		}
+		double margin = (fRange[1] - fRange[0]) / 4.;
+		return new double[] {Math.max(0., fRange[0] - margin), Math.min(nyquist, fRange[1] + margin)};
+	}
+
+	/**
 	 * Can the system handle demuxing the next data unit ? 
 	 * Currently used to enable menus on the clip display
 	 * @return true if it's OK to demux the next sound. 
