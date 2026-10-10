@@ -71,10 +71,13 @@
 <ul>
 <li><b>All bearings, triangulated or not.</b> The default.</li>
 <li><b>Only bearings in a triangulation.</b> Bearings that are not part of a triangulation are hidden.</li>
-<li><b>Only bearings in a triangulation this display shows.</b> A bearing is shown only if the display's triangulation data selector, above, shows its triangulation. Bearings and triangulations then always agree, and the quality limits are set in one place.</li>
 </ul>
 
-<p>A bearing still being worked on, with a proposed match but no saved triangulation, is shown by the last two choices, since its triangulation cannot yet be judged.</p>
+<p><b>Hide bearings in a triangulation on one of its own sonobuoys</b> also hides the bearings of triangulations <a href="#Quality">on a sonobuoy</a>, whose location cannot be trusted. It is not ticked by default.</p>
+
+<p>A bearing still being worked on, with a proposed match but no saved triangulation, counts as triangulated, and is not hidden as on a sonobuoy, since its triangulation cannot yet be judged.</p>
+
+<p>Each display keeps its own settings, so one map can show every bearing while another shows only triangulated ones.</p>
 
 <p>This replaces the <b>Crosses only</b> box of earlier versions. Settings saved with it ticked become <b>Only bearings in a triangulation</b>.</p>
 

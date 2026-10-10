@@ -55,7 +55,9 @@ public class DifarSelectPanel implements PamDialogPanel {
 
 	private JButton selectAll, selectNone;
 
-	private JRadioButton allBearings, triangulatedBearings, shownTriangulationBearings;
+	private JRadioButton allBearings, triangulatedBearings;
+
+	private JCheckBox hideOnBuoy;
 
 	public DifarSelectPanel(DifarDataSelector difarDataSelector) {
 		this.difarDataSelector = difarDataSelector;
@@ -144,17 +146,16 @@ public class DifarSelectPanel implements PamDialogPanel {
 		c.gridy++;
 		panel.add(triangulatedBearings = new JRadioButton("Only bearings in a triangulation"), c);
 		c.gridy++;
-		panel.add(shownTriangulationBearings = new JRadioButton(
-				"Only bearings in a triangulation this display shows"), c);
+		panel.add(hideOnBuoy = new JCheckBox("Hide bearings in a triangulation on one of its own sonobuoys"), c);
 		ButtonGroup group = new ButtonGroup();
 		group.add(allBearings);
 		group.add(triangulatedBearings);
-		group.add(shownTriangulationBearings);
 		allBearings.setToolTipText("Show every bearing that passes the filters above");
 		triangulatedBearings.setToolTipText("Hide bearings that are not part of a triangulation");
-		shownTriangulationBearings.setToolTipText("<html>Hide bearings whose triangulation this display hides.<br>"
-				+ "Which triangulations are shown is set in this display's options for DIFAR Crossings:<br>"
-				+ "the smallest crossing angle, the largest location error, and triangulations on their own sonobuoys.</html>");
+		hideOnBuoy.setToolTipText("<html>A triangulation is on a sonobuoy when it lies within the on-buoy radius<br>"
+				+ "of one of its own sonobuoys, often because one bearing points at another sonobuoy.<br>"
+				+ "Its location cannot be trusted. See Triangulation quality in the DIFAR help,<br>"
+				+ "under Advanced localisation.</html>");
 		return panel;
 	}
 
@@ -181,16 +182,13 @@ public class DifarSelectPanel implements PamDialogPanel {
 			channel[i].setSelected(number >= difarSelectParameters.channelEnabled.length
 					|| difarSelectParameters.channelEnabled[number]);
 		}
-		switch (difarSelectParameters.bearingsShown) {
-		case DifarSelectParameters.BEARINGS_TRIANGULATED:
+		if (difarSelectParameters.bearingsShown == DifarSelectParameters.BEARINGS_TRIANGULATED) {
 			triangulatedBearings.setSelected(true);
-			break;
-		case DifarSelectParameters.BEARINGS_SHOWN_TRIANGULATIONS:
-			shownTriangulationBearings.setSelected(true);
-			break;
-		default:
+		}
+		else {
 			allBearings.setSelected(true);
 		}
+		hideOnBuoy.setSelected(difarSelectParameters.hideOnBuoyBearings);
 	}
 
 	@Override
@@ -212,15 +210,9 @@ public class DifarSelectPanel implements PamDialogPanel {
 					difarSelectParameters.channelEnabled[number] = channel[i].isSelected();
 				}
 			}
-			if (triangulatedBearings.isSelected()) {
-				difarSelectParameters.bearingsShown = DifarSelectParameters.BEARINGS_TRIANGULATED;
-			}
-			else if (shownTriangulationBearings.isSelected()) {
-				difarSelectParameters.bearingsShown = DifarSelectParameters.BEARINGS_SHOWN_TRIANGULATIONS;
-			}
-			else {
-				difarSelectParameters.bearingsShown = DifarSelectParameters.BEARINGS_ALL;
-			}
+			difarSelectParameters.bearingsShown = triangulatedBearings.isSelected()
+					? DifarSelectParameters.BEARINGS_TRIANGULATED : DifarSelectParameters.BEARINGS_ALL;
+			difarSelectParameters.hideOnBuoyBearings = hideOnBuoy.isSelected();
 		}
 		catch (NumberFormatException e) {
 			return false;

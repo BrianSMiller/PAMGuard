@@ -36,14 +36,14 @@ public class DifarSelectParameters extends DataSelectParams implements Cloneable
 	/** Show only bearings that are part of a triangulation. */
 	public static final int BEARINGS_TRIANGULATED = 1;
 
-	/**
-	 * Show only bearings in a triangulation that the display's own
-	 * triangulation filter shows, so bearings and triangulations agree.
-	 */
-	public static final int BEARINGS_SHOWN_TRIANGULATIONS = 2;
-
 	/** Which bearings to show: one of the BEARINGS_ values. */
 	public int bearingsShown = BEARINGS_ALL;
+
+	/**
+	 * Whether to hide bearings in a triangulation that lies on one of its
+	 * own sonobuoys, where its location cannot be trusted.
+	 */
+	public boolean hideOnBuoyBearings = false;
 
 	/**
 	 * Parameters for the DIFAR data selector.
@@ -67,11 +67,13 @@ public class DifarSelectParameters extends DataSelectParams implements Cloneable
 		}
 		this.showOnlyCrossBearings = false;
 		this.bearingsShown = BEARINGS_ALL;
+		this.hideOnBuoyBearings = false;
 	}
 
 	/**
 	 * Carry settings saved before {@link #bearingsShown} existed: "Crosses
-	 * only" ticked becomes "only bearings in a triangulation".
+	 * only" ticked becomes "only bearings in a triangulation". A value from
+	 * the briefly used third choice becomes the same.
 	 */
 	public void upgrade() {
 		if (showOnlyCrossBearings) {
@@ -79,6 +81,9 @@ public class DifarSelectParameters extends DataSelectParams implements Cloneable
 				bearingsShown = BEARINGS_TRIANGULATED;
 			}
 			showOnlyCrossBearings = false;
+		}
+		if (bearingsShown != BEARINGS_ALL && bearingsShown != BEARINGS_TRIANGULATED) {
+			bearingsShown = BEARINGS_TRIANGULATED;
 		}
 	}
 	

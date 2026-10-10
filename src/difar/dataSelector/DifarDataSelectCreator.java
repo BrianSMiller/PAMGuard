@@ -1,17 +1,12 @@
 package difar.dataSelector;
 
-import java.util.ArrayList;
-
 import difar.DifarControl;
-import difar.crossings.DifarCrossingDataBlock;
 import generalDatabase.lookupTables.LookupList;
 import PamguardMVC.PamDataBlock;
 import PamguardMVC.PamDataUnit;
-import PamguardMVC.dataSelector.CompoundDataSelector;
 import PamguardMVC.dataSelector.DataSelectParams;
 import PamguardMVC.dataSelector.DataSelector;
 import PamguardMVC.dataSelector.DataSelectorCreator;
-import PamguardMVC.dataSelector.SuperDetDataSelector;
 
 public class DifarDataSelectCreator extends DataSelectorCreator {
 
@@ -29,36 +24,21 @@ public class DifarDataSelectCreator extends DataSelectorCreator {
 	}
 
 	/**
-	 * PAMGuard adds a section to the dialog for each grouping a DIFAR clip can
-	 * belong to. The section for triangulations is left out: the DIFAR clip
-	 * filter offers the same choice in plain words, and uses the display's
-	 * own triangulation filter, so bearings and triangulations agree. Sections
-	 * for other groupings are kept.
+	 * PAMGuard adds a section to the dialog for each grouping a DIFAR clip
+	 * could belong to. None is added here.
+	 * <p>
+	 * In practice DIFAR clips belong only to triangulations, and the DIFAR
+	 * clip filter's Triangulations panel covers those in plain words. Other
+	 * groupings are listed only because they accept any kind of data, such as
+	 * the deep learning classifier's detection groups. They never hold DIFAR
+	 * clips, and choosing AND in their section would hide every bearing.
+	 * Should DIFAR clips ever be grouped another way, this is where to let
+	 * that grouping's section back in.
 	 */
 	@Override
 	protected DataSelector addSuperDetectionOptions(DataSelector ds, String selectorName,
 			boolean allowScores, String selectorType) {
-		DataSelector withSections = super.addSuperDetectionOptions(ds, selectorName, allowScores, selectorType);
-		if (withSections == ds) {
-			return ds;
-		}
-		if (isTriangulationSection(withSections)) {
-			return ds;
-		}
-		if (!(withSections instanceof CompoundDataSelector)) {
-			return withSections;
-		}
-		ArrayList<DataSelector> sections = ((CompoundDataSelector) withSections).getSelectorList();
-		sections.removeIf(DifarDataSelectCreator::isTriangulationSection);
-		return sections.size() == 1 ? sections.get(0) : withSections;
-	}
-
-	/**
-	 * @return true if a selector is PAMGuard's section for DIFAR triangulations.
-	 */
-	private static boolean isTriangulationSection(DataSelector selector) {
-		return selector instanceof SuperDetDataSelector
-				&& selector.getPamDataBlock() instanceof DifarCrossingDataBlock;
+		return ds;
 	}
 
 	@Override
