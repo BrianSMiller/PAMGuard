@@ -142,9 +142,9 @@ not planned: the upgrade rematches instead, and keeps the old files in a backup.
      It was parked because DIFAR clips carried their triangulations; that obstacle is gone now that
      triangulations live in the database.
 
-- Rename UI labels to match the help's terms: the data selector's "Crossing quality" panel and
-  "Hide crossings on one of their own buoys", and the settings' "Max candidates per buoy" and
-  "On-buoy radius", to triangulation and sonobuoy. Leave database table and column names.
+- Rename UI labels to match the help's terms: the settings' "Max candidates per buoy" and
+  "On-buoy radius", to triangulation and sonobuoy. Leave database table and column names. The
+  data selector's labels are done ("Triangulation quality").
 
 ## Tests owed
 

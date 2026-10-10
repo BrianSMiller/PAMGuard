@@ -24,8 +24,27 @@ public class DifarSelectParameters extends DataSelectParams implements Cloneable
 	public boolean crossBearings;
 	public int numChannels;
 
+	/**
+	 * Replaced by {@link #bearingsShown}. Kept so that settings saved with
+	 * "Crosses only" ticked can be read; see {@link #upgrade()}.
+	 */
 	public boolean showOnlyCrossBearings;
-	
+
+	/** Show every bearing, in a triangulation or not. */
+	public static final int BEARINGS_ALL = 0;
+
+	/** Show only bearings that are part of a triangulation. */
+	public static final int BEARINGS_TRIANGULATED = 1;
+
+	/**
+	 * Show only bearings in a triangulation that the display's own
+	 * triangulation filter shows, so bearings and triangulations agree.
+	 */
+	public static final int BEARINGS_SHOWN_TRIANGULATIONS = 2;
+
+	/** Which bearings to show: one of the BEARINGS_ values. */
+	public int bearingsShown = BEARINGS_ALL;
+
 	/**
 	 * Parameters for the DIFAR data selector.
 	 * @param speciesList
@@ -47,7 +66,20 @@ public class DifarSelectParameters extends DataSelectParams implements Cloneable
 			this.channelEnabled[i] = true;
 		}
 		this.showOnlyCrossBearings = false;
-		
+		this.bearingsShown = BEARINGS_ALL;
+	}
+
+	/**
+	 * Carry settings saved before {@link #bearingsShown} existed: "Crosses
+	 * only" ticked becomes "only bearings in a triangulation".
+	 */
+	public void upgrade() {
+		if (showOnlyCrossBearings) {
+			if (bearingsShown == BEARINGS_ALL) {
+				bearingsShown = BEARINGS_TRIANGULATED;
+			}
+			showOnlyCrossBearings = false;
+		}
 	}
 	
 	//TODO: Add classification type

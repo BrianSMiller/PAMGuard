@@ -52,17 +52,31 @@
 
 <h3><a name="Selector">Triangulation data selector</a></h3>
 
-<p>Displays that use data selectors, such as the map, offer a data selector for triangulations. It is enabled by default, and hides:</p>
+<p>Displays that use data selectors, such as the map, offer a data selector for triangulations, in their options for <b>DIFAR Crossings</b>. Each display has its own. Its <b>Triangulation quality</b> panel is enabled by default, and hides:</p>
 
 <ul>
 <li>triangulations whose crossing angle is less than the <b>Smallest crossing angle</b>, 5 degrees by default;</li>
-<li>triangulations on one of their own sonobuoys, unless <b>Hide crossings on one of their own buoys</b> is unticked;</li>
+<li>triangulations on one of their own sonobuoys, unless <b>Hide triangulations on one of their own sonobuoys</b> is unticked;</li>
 <li>triangulations whose larger x or y error exceeds the <b>Largest location error</b>, if that option is ticked. It is not ticked by default.</li>
 </ul>
 
 <p>Triangulations with no crossing angle are shown, since nothing is known against them.</p>
 
-<!-- Screenshot: the map's data selection dialog for DIFAR triangulations, showing the Crossing quality panel. -->
+<!-- Screenshot: the map's data selection dialog for DIFAR triangulations, showing the Triangulation quality panel. -->
+
+<h3><a name="BearingSelector">Showing bearings by triangulation</a></h3>
+
+<p>The data selector for DIFAR bearings, in a display's options for <b>Processed DIFAR Data</b>, has a <b>Triangulations</b> panel. It chooses which bearings to show:</p>
+
+<ul>
+<li><b>All bearings, triangulated or not.</b> The default.</li>
+<li><b>Only bearings in a triangulation.</b> Bearings that are not part of a triangulation are hidden.</li>
+<li><b>Only bearings in a triangulation this display shows.</b> A bearing is shown only if the display's triangulation data selector, above, shows its triangulation. Bearings and triangulations then always agree, and the quality limits are set in one place.</li>
+</ul>
+
+<p>A bearing still being worked on, with a proposed match but no saved triangulation, is shown by the last two choices, since its triangulation cannot yet be judged.</p>
+
+<p>This replaces the <b>Crosses only</b> box of earlier versions. Settings saved with it ticked become <b>Only bearings in a triangulation</b>.</p>
 
 <p>&nbsp;</p>
 

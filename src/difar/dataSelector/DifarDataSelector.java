@@ -11,6 +11,8 @@ import java.util.Vector;
 
 import difar.DifarControl;
 import difar.DifarDataUnit;
+import difar.crossings.DifarCrossing;
+import difar.crossings.DifarCrossingDataBlock;
 import PamController.PamControlledUnitSettings;
 import PamController.PamSettingManager;
 import PamController.PamSettings;
@@ -147,11 +149,53 @@ public class DifarDataSelector extends DataSelector {
 		 * new clip then must still see it as crossed. Until then its location
 		 * comes from its temporary crossing.
 		 */
-		if (difarSelectParameters.showOnlyCrossBearings && difarDataUnit.getCrossLocation()==null){
-			return false;
+		switch (difarSelectParameters.bearingsShown) {
+		case DifarSelectParameters.BEARINGS_TRIANGULATED:
+			return difarDataUnit.getCrossLocation() != null;
+		case DifarSelectParameters.BEARINGS_SHOWN_TRIANGULATIONS:
+			return inShownTriangulation(difarDataUnit);
+		default:
+			return true;
 		}
-		
-		return true;
+	}
+
+	/**
+	 * Whether a clip is part of a triangulation that this display shows. The
+	 * display's own triangulation filter, the data selector for DIFAR
+	 * crossings with the same name as this one, decides, so a bearing is shown
+	 * exactly when its triangulation is.
+	 * <p>
+	 * A clip with only a proposed match, still being worked on, has no
+	 * triangulation to judge yet, so it is shown.
+	 * @param difarDataUnit a clip.
+	 * @return true if it should be shown.
+	 */
+	private boolean inShownTriangulation(DifarDataUnit difarDataUnit) {
+		DifarCrossing crossing = difarDataUnit.getCrossing();
+		if (crossing == null) {
+			return difarDataUnit.getCrossLocation() != null;
+		}
+		DataSelector triangulationSelector = getTriangulationSelector();
+		if (triangulationSelector == null) {
+			return true;
+		}
+		DataSelectParams params = triangulationSelector.getParams();
+		if (params != null && params.getCombinationFlag() == DataSelectParams.DATA_SELECT_DISABLE) {
+			return true;
+		}
+		return triangulationSelector.scoreData(crossing) > 0;
+	}
+
+	/**
+	 * @return this display's data selector for DIFAR crossings, or null if
+	 * there is none.
+	 */
+	private DataSelector getTriangulationSelector() {
+		DifarCrossingDataBlock crossings = difarControl.getDifarProcess().getCrossingDataBlock();
+		if (crossings == null) {
+			return null;
+		}
+		return crossings.getDataSelector(getSelectorName(), false);
 	}
 
 	/**
@@ -210,6 +254,7 @@ public class DifarDataSelector extends DataSelector {
 	@Override
 	public void setParams(DataSelectParams dataSelectParams) {
 		difarSelectParameters = (DifarSelectParameters) dataSelectParams;
+		difarSelectParameters.upgrade();
 	}
 
 	/* (non-Javadoc)
