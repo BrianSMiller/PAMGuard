@@ -126,6 +126,32 @@ delays from cross-correlating clips' audio.
 Viewer compaction works, and writes clips saved in the Viewer. Converting old datasets' crossings is
 not planned: the upgrade rematches instead, and keeps the old files in a backup.
 
+## Normal mode loses DIFAR clips at Stop, 12 October 2026
+
+Found on the 2013 pilot's first complete Koogu run (`koogu-auto/runs/2026-10-10_1209_first-complete-run`,
+build 7697a9a). In the Viewer, DIFAR clips and triangulations stop at 2013-03-08 00:30:52, whatever
+the load period. Must be fixed before the pilot's Viewer clean-up can pass. Handover:
+`2013-abwv-pilot/notes`, 12 October 2026.
+
+- **A. The queue outlives the binary store.** When the audio files run out, the binary store closes,
+  but DIFAR keeps working through its queue. Triangulations still reach the database; their clips are
+  written nowhere. The last binary file's footer was written at 02:07:40 wall clock, and the last
+  triangulation the Viewer shows at 02:07:40.584. 206 triangulations, to 04:47 data time, were
+  written after that, up to 02:10:17. Footers (halved, see "Core issues") hold about 1,730 clips
+  against 2,605 tracked group rows, so about 870 clips are lost. Fix: DIFAR drains its queue before
+  the binary store closes. Check the order of `pamStop` calls and what services the queue.
+- **B. DIFAR falls behind the audio without limit.** File audio ran at 80 to 100 times real time.
+  A clip is written when DIFAR saves it (`DifarProcess.java:1424`), into whichever binary file is
+  open (`BinaryDataSource.java:256-262`), and files roll over by the master clock, not clip time.
+  The lag grew from about 30 minutes of data time at 19:30 to about 6 hours by the end, visible in
+  the `BinaryFile` column of the crossing children table. Late clips sit in files hours away from
+  their own time, and the Viewer finds them only when the load period covers both. Options: find
+  what limits throughput (the auto-save timer counts wall-clock seconds), hold the audio back while
+  the queue is long, or write clips by their own data time. Confirm the design before building.
+- **Test.** After a Normal mode run, every child clip in the database must be found in the binary
+  files, in the file for its own time. A candidate for PAMGuard's test framework, not only the
+  pilot's `run.sh`.
+
 ## Code, before or after the pull request
 
 - Reprocessing over existing binaries. A Normal mode rerun over the same data time overwrites every
@@ -343,6 +369,15 @@ items below are about making fewer of them necessary.
 - Sample numbers in Viewer-written headers count from 1970. Nothing in DIFAR reads them.
 - The parked compactor (commit `ff1a2c86`) drops cross-match partners. Do not run it on real data
   until crossings are separate units.
+- A single click in the DIFARgram on a saved clip counts as an edit (`DIFARGram.java:763` updates the
+  clip), so the next scroll asks to save. Seen on the 2013 pilot, 11 October 2026, after a stray
+  click. Clicks on saved clips should change nothing until the operator acts.
+- The Viewer save dialog does not say what changed, and Cancel leaves the change pending, so the
+  dialog returns at every scroll. Name the changed clips, and offer to discard.
+- Changing the load period silently rewrote, in place and at the same sizes, every DIFAR file of the
+  2013 pilot run from `20130307_230000` onwards, with no edits. Not explained. A clip claimed by two
+  triangulations is ruled out (none is). Possibly linked to clips sitting in files far from their own
+  time (Normal mode item B). Recheck once A and B are fixed.
 
 ## Documentation
 
@@ -376,7 +411,9 @@ items below are about making fewer of them necessary.
   the WAV annotation already records.
 - `canMark()` in DIFAR's spectrogram observer is dead code; its caller is commented out.
 - `ClearCrossingTask` is unused. Delete it with `DIFARCrossingInfo`.
-- Tracked groups are old and unused. Drop them, or replace them with a general tracking tool.
+- Tracked groups are old and unused. Drop them, or replace them with a general tracking tool (for
+  example multiple hypothesis tracking). They ignore buoy history: every row of the 2013 pilot run
+  carries the last buoy deployed on its channel, with an empty buoy name and a 1970 buoy time.
 - The simulated sonobuoy test document lives in the data folder. Consider moving it into the repo.
 
 ## Timing errors and sonobuoy positions
@@ -510,3 +547,16 @@ S:\manuscripts\2023-DCLDE\TODO.md and DATA_ISSUES.md.
   parent. DIFAR now sets it on save.
 - The GPS import dialog's null mouse position is fixed on `fix-gps-import-dialog`. The pull request is
   open.
+- Stored settings override `-wavfilefolder` in the Viewer. The command line sets the folder, then
+  restored settings set it back to the stored path (`Setting offline wav file folder to ...`). If
+  that path is gone, Sound Files show no data. Seen on the 2013 pilot, 12 October 2026.
+- The map's DIFAR data selectors fail to load their settings at Viewer startup: `CompoundParams
+  cannot be cast to DifarSelectParameters`, for Queued and Processed DIFAR Data. Possibly core now
+  wraps the selector in a compound one, since clips have a parent triangulation. Check whether DIFAR
+  or core should handle it.
+- The data map's time axis rarely scales to the data. Normal mode file runs write settings and other
+  rows at wall-clock time, and the start defaults to 1970. Settings changes made outside the data's
+  time would be better on their own list than on the data axis.
+- Coupled scrollers overflowed the stack once in the Viewer (`ViewerScrollerManager.followCoupledScroller`
+  and `PamScrollSlider.valueSetMillis` calling each other), after a cancelled DIFAR save dialog.
+  Not reproduced on a fresh load. Watch for it.
