@@ -168,11 +168,17 @@ including 0 s, and the Viewer, work as before.
 Still open:
 - The deep learning classifier does not wait for its own worker at Stop. On the rerun it wrote three
   results at 06:10:26 after its binary file had closed ("in file null"). No DIFAR clips were lost,
-  since the last is at 05:56, but clips triggered in the last seconds of a run could be. The fix
-  belongs in the classifier: a note for Jamie.
+  since the last is at 05:56, but clips triggered in the last seconds of a run could be. When
+  playing sound files without grouped detections, the model runs on its own worker queue
+  (`StandardClassifierModel.runModel`), and `DLClassifyProcess.pamStop` queues the last buffer
+  without waiting for it. The fix belongs in the classifier. Noted only, not reported: three
+  results at the end of a run of files played at speed. Raise it if it costs clips.
 - The classifier also warns, many times a run, that its raw data are shorter than its model
   results' time limits, always by 600 samples (2.4 s at 250 Hz). Nothing is trimmed, so detections
-  keep their audio. A note for Jamie.
+  keep their audio. Cause not traced. A guess: merged segments overlap (window 1,125 samples, hop
+  500, so 625 samples of overlap each), and the raw data and the results' span count the overlap
+  differently. 625 is close to 600 but not equal, so that is not the whole story. Noted only, not
+  reported.
 - The threaded observers' pause gives up after about 100 short sleeps, then lets data through. Lag
   stayed under a minute on the pilot, but is not strictly bounded.
 - Tracked group selection reads and sets a Swing list off the Swing thread. It did so before, from
