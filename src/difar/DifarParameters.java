@@ -376,6 +376,16 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 	public float autoSaveTime =  3.0f; //seconds
 	
 	public boolean autoSaveDResult=false;
+
+	/**
+	 * How processed clips are auto saved. False saves each clip after
+	 * autoSaveTime, on the DIFARgram, so an operator can review it. True
+	 * saves each clip as fast as possible with no review: in Normal mode a
+	 * classified clip is processed and saved where it is made, and never
+	 * shown on the DIFARgram (see DifarProcess.isUnattended). Settings saved
+	 * before this option existed load as false.
+	 */
+	public boolean autoSaveUnattended=false;
 	
 	/**
 	 * when auto saving the difar result either the angle can be saved or the angle and range can be saved if it has range

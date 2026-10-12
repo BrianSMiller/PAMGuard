@@ -159,13 +159,16 @@ of 0 s, a save waited for the timer's first tick, 100 ms later, behind display d
 real time, 100 ms is 10 s of data per clip. PAMGuard never held the audio back for this queue, and
 did not wait for it at Stop.
 
-**Fix, on `difar-unattended-save`, awaiting the rerun.** With auto-process, auto-save and a delay of
-0 s in Normal mode, DIFAR processes and saves each classified clip where it is made, on the thread
-that made it (`DifarProcess.isUnattended`, `processUnattended`; `DifarControl.saveUnattended`). For
+**Fix, on `difar-unattended-save`, awaiting the rerun.** Auto save now has two choices in the
+Automation settings: "With a delay for review" (as before) and "As fast as possible, with no review"
+(`DifarParameters.autoSaveUnattended`, false for older settings). With the second, auto-process on,
+in Normal mode, DIFAR processes and saves each classified clip where it is made, on the thread that
+made it (`DifarProcess.isUnattended`, `processUnattended`; `DifarControl.saveUnattended`). For
 the Koogu trigger this is the deep learning classifier's worker. PAMGuard's existing pause for slow
 modules then holds the audio back: the classifier's file-mode queue of two batches waits for its
 worker, and the threaded observers wait for the classifier. No core changes. The displays are told
-of each save on the Swing thread. A delay above 0 s, and the Viewer, work as before.
+of each save on the Swing thread. Saving with a delay for review, at any delay including 0 s, and
+the Viewer, work as before. The 2013 pilot's settings need the new choice set once.
 
 Still to confirm on the rerun:
 - The deep learning classifier does not wait for its own worker at Stop. Its last batches, and the

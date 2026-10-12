@@ -113,6 +113,7 @@ public class DifarParamsDialog extends PamDialog {
 //	JComboBox autoProcessSpecies; // in future this will have to be dependant on number of detectors/classifyers/ for now there is only 1
 	JComboBox firstOrder,secondOrder;
 	JCheckBox autoSaveDResult; //moved to actions panel
+	JRadioButton autoSaveForReview, autoSaveUnattended;
 	JTextField autoSaveTime;
 	JCheckBox autoSaveAngleOnly;
 	JCheckBox autoProcess;
@@ -247,10 +248,35 @@ public class DifarParamsDialog extends PamDialog {
 		autoSaveDResult=new JCheckBox();
 		autoSaveDResult.setName("Auto save processed clips");
 		
+		/*
+		 * Two ways to auto save: after a delay, on the DIFARgram, so the
+		 * operator can review each clip; or as fast as possible, with no
+		 * review, for unattended processing of files.
+		 */
+		autoSaveForReview = new JRadioButton("With a delay for review:");
+		autoSaveForReview.setToolTipText("<HTML>Each processed clip is shown on the DIFARGram, and saved after the delay<br>"
+				+ "unless the operator acts first.</HTML>");
 		autoSaveTime=new JTextField(3);
-		autoSaveTime.setName("After how many seconds");
+		autoSaveTime.setToolTipText("Delay before a processed clip is saved, in seconds");
+		autoSaveUnattended = new JRadioButton("As fast as possible, with no review");
+		autoSaveUnattended.setToolTipText("<HTML>Fully automated. In Normal mode each classified clip is processed and saved<br>"
+				+ "as soon as it is made, and is not shown on the DIFARGram. PAMGuard waits for DIFAR,<br>"
+				+ "so processing from files may run more slowly.</HTML>");
+		ButtonGroup autoSaveGroup = new ButtonGroup();
+		autoSaveGroup.add(autoSaveForReview);
+		autoSaveGroup.add(autoSaveUnattended);
+		JPanel reviewRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+		reviewRow.add(autoSaveForReview);
+		reviewRow.add(autoSaveTime);
+		reviewRow.add(new JLabel(" seconds"));
+		JPanel unattendedRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+		unattendedRow.add(autoSaveUnattended);
+		ActionListener autoSaveChange = e -> enableAutoSave();
+		autoSaveDResult.addActionListener(autoSaveChange);
+		autoSaveForReview.addActionListener(autoSaveChange);
+		autoSaveUnattended.addActionListener(autoSaveChange);
 		
-		JComponent[] autoComps = {autoProcess,/*firstOrder,*/autoSaveDResult,autoSaveTime,/*autoSaveAngleOnly*/};
+		JComponent[] autoComps = {autoProcess,/*firstOrder,*/autoSaveDResult,reviewRow,unattendedRow,/*autoSaveAngleOnly*/};
 		
 		JPanel autoSavePanel = new JPanel(new GridBagLayout());
 		PamPanel.layoutGrid(autoSavePanel, autoComps);
@@ -701,6 +727,7 @@ public class DifarParamsDialog extends PamDialog {
 		autoProcess.setSelected(difarParameters.autoProcess);
 		autoSaveDResult.setSelected(difarParameters.autoSaveDResult);
 		autoSaveTime.setText(new Float(difarParameters.autoSaveTime).toString());
+		setAutoSaveMode(difarParameters.autoSaveUnattended);
 		
 
 		// Keyboard commands
@@ -836,7 +863,11 @@ public class DifarParamsDialog extends PamDialog {
 			difarParameters.useSummaryLine = useSummaryLine.isSelected();
 			difarParameters.autoProcess = autoProcess.isSelected();
 			difarParameters.autoSaveDResult=autoSaveDResult.isSelected();
-			difarParameters.autoSaveTime=(float) new Float(autoSaveTime.getText());
+			difarParameters.autoSaveUnattended = autoSaveUnattended.isSelected();
+			if (autoSaveForReview.isSelected()) {
+				// the delay is only read when it is used, so a stale entry cannot block OK
+				difarParameters.autoSaveTime=(float) new Float(autoSaveTime.getText());
+			}
 		}catch(Exception e){
 			return showWarning(e.getMessage());
 		}
@@ -935,11 +966,33 @@ public class DifarParamsDialog extends PamDialog {
 		}
 		
 //		autoProcessSpecies.setSelectedItem(newDifarParameters.autoProcessSpecies==null?noAutoItem:newDifarParameters.autoProcessSpecies); // in future this will have to be dependant on number of detectors/classifyers/ for now there is only 1
-		firstOrder.setSelectedItem(newDifarParameters.firstOrder);
+		// the first order and save-angle-only controls are not built, so are not reset
 		autoProcess.setSelected(newDifarParameters.autoProcess);
 		autoSaveDResult.setSelected(newDifarParameters.autoSaveDResult);
 		autoSaveTime.setText(new Float(newDifarParameters.autoSaveTime).toString());
-		autoSaveAngleOnly.setSelected(newDifarParameters.autoSaveAngleOnly);
+		setAutoSaveMode(newDifarParameters.autoSaveUnattended);
+	}
+
+	/**
+	 * Select how processed clips are auto saved, and enable the controls to match.
+	 * @param unattended true to save as fast as possible with no review,
+	 * false to save after a delay for review.
+	 */
+	private void setAutoSaveMode(boolean unattended) {
+		autoSaveUnattended.setSelected(unattended);
+		autoSaveForReview.setSelected(!unattended);
+		enableAutoSave();
+	}
+
+	/**
+	 * The auto save choices apply only when auto save is on, and the delay
+	 * only when saving for review.
+	 */
+	private void enableAutoSave() {
+		boolean on = autoSaveDResult.isSelected();
+		autoSaveForReview.setEnabled(on);
+		autoSaveUnattended.setEnabled(on);
+		autoSaveTime.setEnabled(on && autoSaveForReview.isSelected());
 	}
 	
 	class AudioPanel extends JPanel implements PamDialogPanel{

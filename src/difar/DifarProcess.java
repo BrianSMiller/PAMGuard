@@ -1256,8 +1256,8 @@ public class DifarProcess extends PamProcess {
 	/**
 	 * Whether new clips are processed and saved with no operator.
 	 * <p>
-	 * True in normal mode when clips are processed and saved automatically,
-	 * with an auto-save countdown of zero. No one reviews such a clip, so it
+	 * True in normal mode when clips are auto-processed and auto saved as
+	 * fast as possible, with no review. No one reviews such a clip, so it
 	 * is processed and saved straight away, on the thread that made it (for a
 	 * detector's clip, the detector's own thread). PAMGuard then waits for
 	 * DIFAR as it waits for that detector. When DIFAR is slow, the audio is
@@ -1265,8 +1265,9 @@ public class DifarProcess extends PamProcess {
 	 * own time, while the binary file for that time is still open. At Stop,
 	 * DIFAR's clips are covered by whatever wait PAMGuard gives the detector.
 	 * <p>
-	 * With a countdown above zero, or in the viewer, clips go to the queue and
-	 * are worked one at a time on the DIFARgram, as before.
+	 * When clips are auto saved with a delay for review, or in the viewer,
+	 * clips go to the queue and are worked one at a time on the DIFARgram.
+	 * A delay of 0 s still goes by the DIFARgram.
 	 * @return true if new clips are processed and saved where they are made.
 	 */
 	public boolean isUnattended() {
@@ -1274,7 +1275,7 @@ public class DifarProcess extends PamProcess {
 			return false;
 		}
 		DifarParameters params = difarControl.getDifarParameters();
-		return params.autoProcess && params.autoSaveDResult && params.autoSaveTime <= 0;
+		return params.autoProcess && params.autoSaveDResult && params.autoSaveUnattended;
 	}
 
 	/**
@@ -1295,8 +1296,8 @@ public class DifarProcess extends PamProcess {
 	/**
 	 * Process and save a clip with no operator, on the calling thread.
 	 * <p>
-	 * The steps are those of the DIFARgram with an auto-save countdown of
-	 * zero: demultiplex, calculate the DIFARgram, pick the strongest bearing,
+	 * The steps are those of the DIFARgram's auto save, with no delay:
+	 * demultiplex, calculate the DIFARgram, pick the strongest bearing,
 	 * match it with clips on other buoys, and save. A clip with no bearing
 	 * cannot be saved automatically, and is left in the queue for the
 	 * operator, as it would be on the DIFARgram.
