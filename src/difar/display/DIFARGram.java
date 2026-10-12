@@ -347,7 +347,9 @@ public class DIFARGram implements DIFARDisplayUnit {
 				
 				if (difarControl.getDifarParameters().showDifarGramSummary) {
 					double[] maxAngleLine = difarDataUnit.getMaximumAngleSummary();
-					if (maxAngleLine != null) {
+					// a saved clip has its surface freed (cleanUpData), and the frequency of
+					// each grid point is worked out from the surface's size
+					if (maxAngleLine != null && difarDataUnit.getSurfaceData() != null) {
 						/**
 						 * Work out the yMax based on the frequency selection of the data unit
 						 */
