@@ -513,6 +513,19 @@ S:\manuscripts\2023-DCLDE\TODO.md and DATA_ISSUES.md.
 
 ## Core issues for Doug
 
+- A data unit has one database index, but a sub-detection logged in its own table and also linked
+  from a super-detection's subtable has two rows. `SQLLogging.logSubtableData()` writes and
+  updates the subtable row through the unit's index and leaves the unit holding the subtable row's
+  index (the lines that saved and restored it are commented out). The unit's next update is then
+  written into its own table at the subtable row's index, over a different unit. In the 2013 pilot
+  Normal mode run of 12 October 2026, 417 of 2,591 DIFAR clip rows were overwritten this way, each
+  time a later triangulation claimed clips from an earlier one. Fixed for DIFAR in
+  `DifarCrossingSubLogging.logSubtableData()`, which hands each clip its subtable index only while
+  the standard method runs. Any other module whose sub-detections have their own table (click
+  detector clicks in offline events, if clicks are logged) may have the same problem. A core fix
+  would make DIFAR's override unnecessary. Check: `check_run_db.py` in the 2013 pilot science
+  folder.
+
 - Settings were saved and loaded with quadratic string building. `Ascii6Bit.createStringData()`
   added one character at a time with `+=`, and `LogSettings` joined stored rows the same way, so
   each addition recopied everything. Closing the Viewer on the DCLDE 2024 database took about ten
