@@ -126,31 +126,19 @@ delays from cross-correlating clips' audio.
 Viewer compaction works, and writes clips saved in the Viewer. Converting old datasets' crossings is
 not planned: the upgrade rematches instead, and keeps the old files in a backup.
 
-## Normal mode loses DIFAR clips at Stop, 12 October 2026
+## Normal mode lost DIFAR clips at Stop: fixed 12 October 2026
 
 Found on the 2013 pilot's first complete Koogu run (`koogu-auto/runs/2026-10-10_1209_first-complete-run`,
-build 7697a9a). In the Viewer, DIFAR clips and triangulations stop at 2013-03-08 00:30:52, whatever
-the load period. Must be fixed before the pilot's Viewer clean-up can pass. Handover:
-`2013-abwv-pilot/notes`, 12 October 2026.
+build 7697a9a). In the Viewer, DIFAR clips and triangulations stopped at 2013-03-08 00:30:52, whatever
+the load period.
 
-- **A. The queue outlives the binary store.** When the audio files run out, the binary store closes,
-  but DIFAR keeps working through its queue. Triangulations still reach the database; their clips are
-  written nowhere. The last binary file's footer was written at 02:07:40 wall clock, and the last
-  triangulation the Viewer shows at 02:07:40.584. 206 triangulations, to 04:47 data time, were
-  written after that, up to 02:10:17. Footers (halved, see "Core issues") hold about 1,730 clips
-  against 2,605 tracked group rows, so about 870 clips are lost. Fix: DIFAR drains its queue before
-  the binary store closes. Check the order of `pamStop` calls and what services the queue.
-- **B. DIFAR falls behind the audio without limit.** File audio ran at 80 to 100 times real time.
-  A clip is written when DIFAR saves it (`DifarProcess.java:1424`), into whichever binary file is
-  open (`BinaryDataSource.java:256-262`), and files roll over by the master clock, not clip time.
-  The lag grew from about 30 minutes of data time at 19:30 to about 6 hours by the end, visible in
-  the `BinaryFile` column of the crossing children table. Late clips sit in files hours away from
-  their own time, and the Viewer finds them only when the load period covers both. Options: find
-  what limits throughput (the auto-save timer counts wall-clock seconds), hold the audio back while
-  the queue is long, or write clips by their own data time. Confirm the design before building.
-- **Test.** After a Normal mode run, every child clip in the database must be found in the binary
-  files, in the file for its own time. A candidate for PAMGuard's test framework, not only the
-  pilot's `run.sh`.
+- **A. The queue outlived the binary store.** When the audio files ran out, the binary store closed,
+  but DIFAR kept working through its queue. Triangulations still reached the database; their clips
+  were written nowhere. About 870 clips were lost.
+- **B. DIFAR fell behind the audio without limit.** File audio ran at 80 to 100 times real time. A
+  clip is written into whichever binary file is open when DIFAR saves it, and files roll over by the
+  master clock, not clip time. The lag grew to about 6 hours, so late clips sat in files hours away
+  from their own time, and the Viewer found them only when the load period covered both.
 
 **Cause.** DIFAR worked its queue outside PAMGuard's data flow. A detector's clip was put in the queue
 and DIFAR returned at once, so PAMGuard counted it as done. The clip was then demultiplexed on a
@@ -159,30 +147,41 @@ of 0 s, a save waited for the timer's first tick, 100 ms later, behind display d
 real time, 100 ms is 10 s of data per clip. PAMGuard never held the audio back for this queue, and
 did not wait for it at Stop.
 
-**Fix, on `difar-unattended-save`, awaiting the rerun.** Auto save now has two choices in the
-Automation settings: "With a delay for review" (as before) and "As fast as possible, with no review"
+**Fix, on `difar-unattended-save`.** Auto save has two choices in the Automation settings: "With a
+delay for review" (as before) and "As fast as possible, with no review"
 (`DifarParameters.autoSaveUnattended`, false for older settings). With the second, auto-process on,
 in Normal mode, DIFAR processes and saves each classified clip where it is made, on the thread that
-made it (`DifarProcess.isUnattended`, `processUnattended`; `DifarControl.saveUnattended`). For
-the Koogu trigger this is the deep learning classifier's worker. PAMGuard's existing pause for slow
-modules then holds the audio back: the classifier's file-mode queue of two batches waits for its
-worker, and the threaded observers wait for the classifier. No core changes. The displays are told
-of each save on the Swing thread. Saving with a delay for review, at any delay including 0 s, and
-the Viewer, work as before. The 2013 pilot's settings need the new choice set once.
+made it (`DifarProcess.isUnattended`, `processUnattended`; `DifarControl.saveUnattended`). For the
+Koogu trigger this is the deep learning classifier's worker. PAMGuard's existing pause for slow
+modules then holds the audio back. No core changes. Saving with a delay for review, at any delay
+including 0 s, and the Viewer, work as before.
 
-Still to confirm on the rerun:
-- The deep learning classifier does not wait for its own worker at Stop. Its last batches, and the
-  DIFAR clips they trigger, may still be cut off by the binary store closing. The clip check will
-  show it, in the last minute of data. If so, the fix belongs in the classifier.
+**Result, 2013 pilot rerun** (`koogu-auto/runs/2026-10-12_1207_unattended-save`, build 8f5cbb0):
+- All 2,591 DIFAR clips in the database are in the binary files (footers 5,182, halved). None lost.
+- Of 1,632 clips in triangulations, 12 sit in the next file after their own time, each within 25 s
+  of the hour boundary: a detector reports a call only after its analysis window. None further out.
+- No "Error in DifarProcess.difarTrigger" and no "has no bearing" in the console.
+- 745 triangulations (603 two-clip, 142 three-clip), against 749 on the first run.
+- About 14 minutes of wall clock for 18 hours of data, 77 times real time on average, dropping to
+  about 25 times through continuous three-channel calling.
+
+Still open:
+- The deep learning classifier does not wait for its own worker at Stop. On the rerun it wrote three
+  results at 06:10:26 after its binary file had closed ("in file null"). No DIFAR clips were lost,
+  since the last is at 05:56, but clips triggered in the last seconds of a run could be. The fix
+  belongs in the classifier: a note for Jamie.
+- The classifier also warns, many times a run, that its raw data are shorter than its model
+  results' time limits, always by 600 samples (2.4 s at 250 Hz). Nothing is trimmed, so detections
+  keep their audio. A note for Jamie.
 - The threaded observers' pause gives up after about 100 short sleeps, then lets data through. Lag
-  should stay small, but is not strictly bounded. The `BinaryFile` lag query will show it.
-- A clip is cut from raw audio still in memory. If the classifier falls far enough behind, the audio
-  may be gone ("Error in DifarProcess.difarTrigger" in the console). Count Koogu detections against
-  DIFAR clips.
+  stayed under a minute on the pilot, but is not strictly bounded.
 - Tracked group selection reads and sets a Swing list off the Swing thread. It did so before, from
   the DIFARgram's worker. Tracked groups are to be deprecated.
 - A clip the operator saves by hand on the DIFARgram is not locked against an unattended save. Only
   matters if the operator works the queue during an unattended run.
+- **Test.** After a Normal mode run, every child clip in the database must be found in the binary
+  files, in the file for its own time. A candidate for PAMGuard's test framework, not only the
+  pilot's `run.sh`.
 
 ## Code, before or after the pull request
 
@@ -412,9 +411,10 @@ items below are about making fewer of them necessary.
   objects, clips still loaded refer to the old copies, and core's `SuperDetection.addSubDetection`
   unlinked each clip from its old copy (`checkExistingSuperDetections`), which in the viewer marks
   the clip as changed (`PamDataUnit.removeSuperDetection`). Linking already skips that in the
-  viewer. Fixed in core on `difar-unattended-save`: a reloaded copy of the same super detection
-  (same UID, same data block) is no longer unlinked. Awaiting a Viewer recheck; then a small core
-  pull request for Doug, separate from DIFAR.
+  viewer. Fixed in core on `difar-unattended-save` (0761825): a reloaded copy of the same super
+  detection (same UID, same data block) is no longer unlinked. Rechecked 12 October: no data files
+  changed after several load period changes. Next: a small core pull request for Doug, separate
+  from DIFAR.
 
 ## Documentation
 
@@ -597,3 +597,9 @@ S:\manuscripts\2023-DCLDE\TODO.md and DATA_ISSUES.md.
 - Coupled scrollers overflowed the stack once in the Viewer (`ViewerScrollerManager.followCoupledScroller`
   and `PamScrollSlider.valueSetMillis` calling each other), after a cancelled DIFAR save dialog.
   Not reproduced on a fresh load. Watch for it.
+- Storage Options keeps any data with a binary output out of the database by default
+  (`StorageOptions.setBlockOptions`), overriding DIFAR's own request (`DifarProcess`,
+  `setShouldLog(true)`). So DIFAR clips go to binary files only unless the user ticks Database. The
+  triangulation design treats clip rows in the database as the one source of truth for buoy-derived
+  values, so DIFAR wants them logged. A question for Doug: let a data block declare its preferred
+  storage default.
