@@ -443,6 +443,13 @@ items below are about making fewer of them necessary.
   Overview's Southern Ocean Research Partnership link (`marinemammals.gov.au/sorp`).
 - The help's search index (`src/help/JavaHelpSearch`) is built separately; ask Doug how it is rebuilt.
 
+## Panels, low priority
+
+- Merge the buoy manager into the DIFAR localisation panel, perhaps as part of its actions. Make
+  the buoy manager and the calibration panel collapsible. Then let the user choose one consolidated
+  DIFAR localisation panel, with everything DIFAR on it, or the separate panels as now: they are
+  meant to be composable.
+
 ## Tidying
 
 - R and MATLAB wrappers around `crossing_clips.sql`.
@@ -523,8 +530,11 @@ S:\manuscripts\2023-DCLDE\TODO.md and DATA_ISSUES.md.
   `DifarCrossingSubLogging.logSubtableData()`, which hands each clip its subtable index only while
   the standard method runs. Any other module whose sub-detections have their own table (click
   detector clicks in offline events, if clicks are logged) may have the same problem. A core fix
-  would make DIFAR's override unnecessary. Check: `check_run_db.py` in the 2013 pilot science
-  folder.
+  would make DIFAR's override unnecessary. Check: `check_run_db.py` in the 2013 pilot test
+  folder, `S:\brian_mil\Documents\Pamguard\2013-abwv-pilot`.
+  Tested 12 October 2026: a Normal mode rerun of the pilot passed it, with 2,591 clip rows, all
+  with their own UID, and all 1,632 link rows finding their clip. Detections and triangulations
+  were unchanged (745). Viewer saves use the same code but have not been retested.
 
 - Settings were saved and loaded with quadratic string building. `Ascii6Bit.createStringData()`
   added one character at a time with `+=`, and `LogSettings` joined stored rows the same way, so
