@@ -104,6 +104,14 @@ public class DifarProcess extends PamProcess {
 	
 	private Timer autoSaveTimer;
 
+	/**
+	 * Held while a clip is demultiplexed and its DIFARgram calculated, and
+	 * while an unattended clip is saved. Clips can be worked on more than one
+	 * thread (see {@link #isUnattended()}), and the demultiplexer and the
+	 * matching are not safe to run on two clips at once.
+	 */
+	private final Object clipLock = new Object();
+
 	private Simplex2D simplex2D;
 	
 	private FIRArbitraryFilter difarAmplitudeFilter;
@@ -196,7 +204,9 @@ public class DifarProcess extends PamProcess {
 		protected Integer doInBackground() throws Exception {
 			try {
 				startMillis = System.currentTimeMillis();
-				processDifarUnit(difarDataUnit, this);
+				synchronized (clipLock) {
+					processDifarUnit(difarDataUnit, this);
+				}
 			}
 			catch (Exception e) {
 				// print the stack trace here, otherwise doinbackground wont' show exceptions
@@ -605,7 +615,8 @@ public class DifarProcess extends PamProcess {
 		getDifarAmplitude(difarDataUnit);
 		
 		
-		if (demuxWorker == null) {
+		// an unattended clip is not shown on the DIFARgram, so it sends no message
+		if (demuxWorker == null && !isUnattended()) {
 			difarControl.sendDifarMessage(new DIFARMessage(DIFARMessage.DemuxComplete, difarDataUnit));
 		}
 
@@ -955,7 +966,7 @@ public class DifarProcess extends PamProcess {
 			difarControl.getViewerEdits().added(queuedDifarData, difarDataUnit);
 		}
 
-		difarControl.sendDifarMessage(new DIFARMessage(DIFARMessage.NewDifarUnit,difarDataUnit));
+		announceNewClip(difarDataUnit);
 		
 		return difarDataUnit.getTimeMilliseconds();
 	}
@@ -1239,7 +1250,75 @@ public class DifarProcess extends PamProcess {
 			difarControl.getViewerEdits().added(queuedDifarData, du);
 		}
 
-		difarControl.sendDifarMessage(new DIFARMessage(DIFARMessage.NewDifarUnit, du));
+		announceNewClip(du);
+	}
+
+	/**
+	 * Whether new clips are processed and saved with no operator.
+	 * <p>
+	 * True in normal mode when clips are processed and saved automatically,
+	 * with an auto-save countdown of zero. No one reviews such a clip, so it
+	 * is processed and saved straight away, on the thread that made it (for a
+	 * detector's clip, the detector's own thread). PAMGuard then waits for
+	 * DIFAR as it waits for that detector. When DIFAR is slow, the audio is
+	 * held back until it catches up, so each clip is written soon after its
+	 * own time, while the binary file for that time is still open. At Stop,
+	 * DIFAR's clips are covered by whatever wait PAMGuard gives the detector.
+	 * <p>
+	 * With a countdown above zero, or in the viewer, clips go to the queue and
+	 * are worked one at a time on the DIFARgram, as before.
+	 * @return true if new clips are processed and saved where they are made.
+	 */
+	public boolean isUnattended() {
+		if (difarControl.isViewer()) {
+			return false;
+		}
+		DifarParameters params = difarControl.getDifarParameters();
+		return params.autoProcess && params.autoSaveDResult && params.autoSaveTime <= 0;
+	}
+
+	/**
+	 * A new clip has joined the queue. An unattended clip is processed and
+	 * saved now (see {@link #isUnattended()}). Any other clip is announced, so
+	 * the queue and the DIFARgram can take it.
+	 * @param difarDataUnit the new clip, already in the queue.
+	 */
+	private void announceNewClip(DifarDataUnit difarDataUnit) {
+		if (isUnattended() && difarDataUnit.canAutoProcess()) {
+			processUnattended(difarDataUnit);
+		}
+		else {
+			difarControl.sendDifarMessage(new DIFARMessage(DIFARMessage.NewDifarUnit, difarDataUnit));
+		}
+	}
+
+	/**
+	 * Process and save a clip with no operator, on the calling thread.
+	 * <p>
+	 * The steps are those of the DIFARgram with an auto-save countdown of
+	 * zero: demultiplex, calculate the DIFARgram, pick the strongest bearing,
+	 * match it with clips on other buoys, and save. A clip with no bearing
+	 * cannot be saved automatically, and is left in the queue for the
+	 * operator, as it would be on the DIFARgram.
+	 * @param difarDataUnit the clip, in the queue.
+	 */
+	private void processUnattended(DifarDataUnit difarDataUnit) {
+		synchronized (clipLock) {
+			try {
+				processDifarUnit(difarDataUnit, null);
+			}
+			catch (Exception e) {
+				// as the DIFARgram's worker does: report it, and leave the clip in the queue
+				e.printStackTrace();
+				return;
+			}
+			if (!difarDataUnit.canAutoSave()) {
+				System.out.printf("DIFAR: clip at %s has no bearing, so is left in the queue\n",
+						PamCalendar.formatDBDateTime(difarDataUnit.getTimeMilliseconds()));
+				return;
+			}
+			difarControl.saveUnattended(difarDataUnit);
+		}
 	}
 
 	/**

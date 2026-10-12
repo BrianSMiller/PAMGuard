@@ -152,6 +152,35 @@ the load period. Must be fixed before the pilot's Viewer clean-up can pass. Hand
   files, in the file for its own time. A candidate for PAMGuard's test framework, not only the
   pilot's `run.sh`.
 
+**Cause.** DIFAR worked its queue outside PAMGuard's data flow. A detector's clip was put in the queue
+and DIFAR returned at once, so PAMGuard counted it as done. The clip was then demultiplexed on a
+Swing worker, and saved by a Swing timer on the Swing thread, one clip at a time. Even with a delay
+of 0 s, a save waited for the timer's first tick, 100 ms later, behind display drawing. At 100 times
+real time, 100 ms is 10 s of data per clip. PAMGuard never held the audio back for this queue, and
+did not wait for it at Stop.
+
+**Fix, on `difar-unattended-save`, awaiting the rerun.** With auto-process, auto-save and a delay of
+0 s in Normal mode, DIFAR processes and saves each classified clip where it is made, on the thread
+that made it (`DifarProcess.isUnattended`, `processUnattended`; `DifarControl.saveUnattended`). For
+the Koogu trigger this is the deep learning classifier's worker. PAMGuard's existing pause for slow
+modules then holds the audio back: the classifier's file-mode queue of two batches waits for its
+worker, and the threaded observers wait for the classifier. No core changes. The displays are told
+of each save on the Swing thread. A delay above 0 s, and the Viewer, work as before.
+
+Still to confirm on the rerun:
+- The deep learning classifier does not wait for its own worker at Stop. Its last batches, and the
+  DIFAR clips they trigger, may still be cut off by the binary store closing. The clip check will
+  show it, in the last minute of data. If so, the fix belongs in the classifier.
+- The threaded observers' pause gives up after about 100 short sleeps, then lets data through. Lag
+  should stay small, but is not strictly bounded. The `BinaryFile` lag query will show it.
+- A clip is cut from raw audio still in memory. If the classifier falls far enough behind, the audio
+  may be gone ("Error in DifarProcess.difarTrigger" in the console). Count Koogu detections against
+  DIFAR clips.
+- Tracked group selection reads and sets a Swing list off the Swing thread. It did so before, from
+  the DIFARgram's worker. Tracked groups are to be deprecated.
+- A clip the operator saves by hand on the DIFARgram is not locked against an unattended save. Only
+  matters if the operator works the queue during an unattended run.
+
 ## Code, before or after the pull request
 
 - Reprocessing over existing binaries. A Normal mode rerun over the same data time overwrites every

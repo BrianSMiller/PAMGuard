@@ -25,6 +25,7 @@ import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileFilter;
 
 import Array.ArrayManager;
@@ -315,11 +316,43 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 			break;
 		}
 		
-		// loop over display units, 
+		notifyDisplays(message);
+	}
+
+	/**
+	 * Pass a message to every DIFAR display, with no other action.
+	 * @param message DIFAR message
+	 */
+	private void notifyDisplays(DIFARMessage message) {
 		for (DIFARDisplayUnit difarDisplay:displayUnits) {
 			difarDisplay.difarNotification(message);
 		}
-		
+	}
+
+	/**
+	 * Save a clip processed with no operator (see
+	 * {@link DifarProcess#isUnattended()}), as the DIFARgram's auto save
+	 * does, on the calling thread. Its triangulation is recorded, unless the
+	 * settings save bearings only. The displays are told afterwards, on the
+	 * Swing thread. The clip never reaches the DIFARgram, so the clip the
+	 * operator is working on, if any, is left alone.
+	 * @param unit the clip, demultiplexed and with a bearing.
+	 */
+	void saveUnattended(DifarDataUnit unit) {
+		final int saved;
+		if (difarParameters.autoSaveAngleOnly) {
+			unit.clearTempCrossing();
+			difarProcess.finalProcessing(unit);
+			difarProcess.getCrossingRecorder().forget(unit);
+			saved = DIFARMessage.SaveDatagramUnitWithoutRange;
+		}
+		else {
+			difarProcess.finalProcessing(unit);
+			difarProcess.getCrossingRecorder().record(unit);
+			unit.clearTempCrossing();
+			saved = DIFARMessage.SaveDatagramUnit;
+		}
+		SwingUtilities.invokeLater(() -> notifyDisplays(new DIFARMessage(saved, unit)));
 	}
 	
 

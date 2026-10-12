@@ -178,6 +178,8 @@ Setting up a filter for obtaining calibrated intensity measurements from sonobuo
 
 <p><a name="Automation"><b>Auto save processed clips:</b> If you select to Auto save processed data, then once a DIFAR clip has been processed it will automatically be saved after the set delay time using the maximum DIFAR angle and automatically crossing bearings to other detections if more than one buoy is in operation. </a></p>
 
+<p><a name="Unattended"><b>Auto save with no delay:</b></a> In Normal mode, when DIFAR clips are auto-processed and auto-saved with a delay of 0 seconds, no one reviews them. Each classified DIFAR clip is then processed and saved as soon as it is made, and is not shown on the DIFARGram. PAMGuard waits for DIFAR as it waits for the detector that triggered the DIFAR clip. When processing from files, the audio is held back whenever DIFAR falls behind, so each DIFAR clip is saved soon after its own time, in the binary file for that time. Processing may therefore run more slowly than without DIFAR. Unclassified DIFAR clips, and any DIFAR clip with no bearing, stay in the queue for the operator. Use a delay above 0 seconds to review each DIFAR clip on the DIFARGram before it is saved.</p>
+
 <p>Auto save also works in Viewer mode, for new DIFAR clips only. A saved DIFAR clip that is opened again in the DIFARGram is never saved automatically. See <a href="difar_ViewerReanalysis.html#Saving">Reanalysis in Viewer mode</a>.</p>
 
 <p>&nbsp;</p>
