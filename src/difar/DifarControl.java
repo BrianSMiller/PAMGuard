@@ -352,7 +352,17 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 			unit.clearTempCrossing();
 			saved = DIFARMessage.SaveDatagramUnit;
 		}
-		SwingUtilities.invokeLater(() -> notifyDisplays(new DIFARMessage(saved, unit)));
+		/*
+		 * The queue strip shows every clip added to the queue, and drops one
+		 * only when told it was taken from the queue. Tell it, then that the
+		 * clip was saved, as the DIFARgram's path does. Without the first
+		 * message, saved clips stay on the queue strip until its history
+		 * limits trim them.
+		 */
+		SwingUtilities.invokeLater(() -> {
+			notifyDisplays(new DIFARMessage(DIFARMessage.ProcessFromQueue, unit));
+			notifyDisplays(new DIFARMessage(saved, unit));
+		});
 	}
 	
 
