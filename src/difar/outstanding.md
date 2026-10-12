@@ -406,10 +406,15 @@ items below are about making fewer of them necessary.
   click. Clicks on saved clips should change nothing until the operator acts.
 - The Viewer save dialog does not say what changed, and Cancel leaves the change pending, so the
   dialog returns at every scroll. Name the changed clips, and offer to discard.
-- Changing the load period silently rewrote, in place and at the same sizes, every DIFAR file of the
-  2013 pilot run from `20130307_230000` onwards, with no edits. Not explained. A clip claimed by two
-  triangulations is ruled out (none is). Possibly linked to clips sitting in files far from their own
-  time (Normal mode item B). Recheck once A and B are fixed.
+- Changing the load period silently rewrote, in place, every DIFAR file holding a clip in a
+  triangulation, with no edits. Seen again on 12 October after A and B were fixed; only timestamps
+  changed (footers identical). Cause, confirmed with a breakpoint: the triangulations reload as new
+  objects, clips still loaded refer to the old copies, and core's `SuperDetection.addSubDetection`
+  unlinked each clip from its old copy (`checkExistingSuperDetections`), which in the viewer marks
+  the clip as changed (`PamDataUnit.removeSuperDetection`). Linking already skips that in the
+  viewer. Fixed in core on `difar-unattended-save`: a reloaded copy of the same super detection
+  (same UID, same data block) is no longer unlinked. Awaiting a Viewer recheck; then a small core
+  pull request for Doug, separate from DIFAR.
 
 ## Documentation
 
