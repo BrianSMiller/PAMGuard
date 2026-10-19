@@ -23,14 +23,6 @@ public class DBCommitter {
 	private DBControl dbControl;
 	
 	private int unComitted = 0;
-
-	/**
-	 * Rows written between commits. Each SQLite commit waits for the disk, and commitNow is
-	 * synchronized, so every module writing to the database waits in turn. At 10 rows, a
-	 * run writing a row per Deep Learning segment spent more time committing than classifying.
-	 * The timer below still commits any remainder within 3 s, and Stop commits everything.
-	 */
-	private static final int COMMIT_ROWS = 500;
 	
 	private long lastCommitTime = 0;
 
@@ -71,7 +63,7 @@ public class DBCommitter {
 
 	public boolean checkCommit(PamConnection pamCon) {
 		unComitted ++;
-		if (unComitted >= COMMIT_ROWS) {
+		if (unComitted >= 10) {
 			commitNow(pamCon);
 		}
 		return true;
