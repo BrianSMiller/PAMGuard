@@ -166,13 +166,14 @@ including 0 s, and the Viewer, work as before.
   about 25 times through continuous three-channel calling.
 
 Still open:
-- The deep learning classifier does not wait for its own worker at Stop. On the rerun it wrote three
-  results at 06:10:26 after its binary file had closed ("in file null"). No DIFAR clips were lost,
-  since the last is at 05:56, but clips triggered in the last seconds of a run could be. When
-  playing sound files without grouped detections, the model runs on its own worker queue
-  (`StandardClassifierModel.runModel`), and `DLClassifyProcess.pamStop` queues the last buffer
-  without waiting for it. The fix belongs in the classifier. Noted only, not reported: three
-  results at the end of a run of files played at speed. Raise it if it costs clips.
+- The deep learning classifier did not wait for its own worker at Stop. On the rerun it wrote three
+  results at 06:10:26 after its binary file had closed ("in file null"). **Fix written, not yet
+  tested on the pilot** (branch `dl-sound-file-batches`, 19 October 2026): a busy flag in
+  `DLTaskThread`, `waitForResults` on the model, and a wait of up to 120 s in
+  `DLClassifyProcess.pamStop`. Binary files close in `pamHasStopped`, after every module's
+  `pamStop`, so waiting there is enough. PAMGuard restarts the classifier at every file, so the
+  wait also runs at each file boundary. Test: rerun the pilot and check for no "in file null" and
+  no "still classifying" in the console.
 - The classifier also warns, many times a run, that its raw data are shorter than its model
   results' time limits, always by 600 samples (2.4 s at 250 Hz). Nothing is trimmed, so detections
   keep their audio. Cause not traced. A guess: merged segments overlap (window 1,125 samples, hop
@@ -188,6 +189,38 @@ Still open:
 - **Test.** After a Normal mode run, every child clip in the database must be found in the binary
   files, in the file for its own time. A candidate for PAMGuard's test framework, not only the
   pilot's `run.sh`.
+
+## Deep learning speed: tried, 19 October 2026
+
+Three Koogu models (song, D-call, fin 20 Hz) on 20 busy one-hour files of 1 kHz Kerguelen 2015
+audio, with no displays. Times are from `pamguard_timing.py` in the reanalysis repo (first to last
+prediction row, so Start to the last result).
+
+| Run | Elapsed |
+|---|---|
+| Before the queue polling sleeps were shortened | 452 s |
+| With shorter sleeps (merged on `difar-unattended-save`) | 281 s |
+| Batches of 20 s instead of 1 s, for sound files | 300 s |
+| Same, under Java Flight Recorder | 415 s |
+| One 250 Hz decimator feeding all three models, profiled (song hop wrongly 2 s) | 372 s |
+| Same, database committed every 500 rows instead of 10, profiled | 490 s |
+
+What we learned:
+- Larger batches do not help. The fixed cost of each model call is small. Removed.
+- Committing less often does not help. Reverted.
+- Java code is a small share of the run. Within it, Koogu's resampling (jpamutils spline and IIR
+  filter) dominates. It runs per segment and so repeats on overlapping audio: about 4.4 times for
+  the song model (22 s window, 5 s hop). Skipped when the input is already at the model's rate, so
+  a 250 Hz decimator upstream removes it. The pilot already does this.
+- With multithreading, each classifier runs on its own thread, so one model and three models take
+  about the same time: the slowest chain sets the pace.
+- Native samples count threads waiting on the disk or in TensorFlow as busy, so they show where
+  threads spend time, not what limits the run. They pointed at SQLite commits, which were not the
+  limit.
+- Run times vary widely between runs. Compare settings only with repeat runs.
+
+Not pursued: parallel PAMGuard runs over parts of a dataset (the Batch Processor), and detecting
+in Python then importing detections for DIFAR. Both stay options for the full reanalysis.
 
 ## Code, before or after the pull request
 
