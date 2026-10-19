@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import PamDetection.RawDataUnit;
 import PamUtils.PamArrayUtils;
+import PamUtils.PamCalendar;
 import PamUtils.PamUtils;
 import PamView.GroupedSourceParameters;
 import PamguardMVC.DataUnitBaseData;
@@ -545,13 +546,29 @@ public class DLClassifyProcess extends PamProcess {
 	 */
 	private boolean checkGroupData(GroupedRawData rawDataUnit) {
 
-		if (PamArrayUtils.sumall(rawDataUnit.getRawData())==0) {
-			System.out.println("DLCLassifyProcess: Warning: the input data was all zero - no passing to DL Process: "); 
-			return false; 
+		boolean allZero = PamArrayUtils.sumall(rawDataUnit.getRawData())==0;
+		int chanMap = rawDataUnit.getChannelBitmap();
+		boolean warned = (zeroDataChannels & chanMap) != 0;
+		if (allZero && !warned) {
+			zeroDataChannels |= chanMap;
+			System.out.printf("DLClassifyProcess: input data all zero on channels %s from %s; skipping until data return%n",
+					PamUtils.getChannelList(chanMap), PamCalendar.formatDateTime(rawDataUnit.getTimeMilliseconds()));
+		}
+		else if (!allZero && warned) {
+			zeroDataChannels &= ~chanMap;
+			System.out.printf("DLClassifyProcess: input data back on channels %s from %s%n",
+					PamUtils.getChannelList(chanMap), PamCalendar.formatDateTime(rawDataUnit.getTimeMilliseconds()));
 		}
 
-		return true;
+		return !allZero;
 	}
+
+	/**
+	 * Channels already reported as all zero, so the warning prints once when a channel
+	 * goes silent (for example zero-filled before a recorder or buoy starts) and once
+	 * when data return, not for every segment.
+	 */
+	private int zeroDataChannels = 0;
 
 
 
@@ -952,6 +969,7 @@ public class DLClassifyProcess extends PamProcess {
 	@Override
 	public void pamStart() {
 		//		System.out.println("PREP MODEL:");
+		zeroDataChannels = 0;
 		
 		//warnings and try/catch etc. are handled within the prep model function.
 		this.dlControl.getDLModel().prepModel(); 
