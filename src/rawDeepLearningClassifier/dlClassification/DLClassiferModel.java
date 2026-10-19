@@ -60,6 +60,18 @@ public interface DLClassiferModel {
 	public void closeModel();
 
 	/**
+	 * Wait for any results still being calculated on another thread, for example by a
+	 * model that queues its input when analysing sound files. Called at Stop, before
+	 * PAMGuard closes its output files. Models that classify on the calling thread
+	 * have nothing to wait for.
+	 * @param timeoutMillis - longest time to wait.
+	 * @return true if all results are in, false if the wait timed out.
+	 */
+	public default boolean waitForResults(long timeoutMillis) {
+		return true;
+	}
+
+	/**
 	 * Get the name of the model.
 	 * 
 	 * @return the name of the model.

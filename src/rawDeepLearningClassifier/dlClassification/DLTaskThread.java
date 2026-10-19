@@ -18,6 +18,13 @@ import rawDeepLearningClassifier.segmenter.GroupedRawData;
 public abstract class DLTaskThread extends Thread {
 
 	private AtomicBoolean run = new AtomicBoolean(true);
+
+	/**
+	 * True while a batch taken from the queue is being classified and its results passed on.
+	 * The queue empties when a batch is taken, before it runs, so an empty queue alone does
+	 * not mean the work is done.
+	 */
+	private AtomicBoolean busy = new AtomicBoolean(false);
 	
 	/**
 	 * The dl model worker. 
@@ -50,13 +57,19 @@ public abstract class DLTaskThread extends Thread {
 			try {
 				if (queue.size()>0) {
 //					System.out.println("DL TASK THREAD: " + "The queue size is " + queue.size()); 
-					ArrayList<? extends PamDataUnit> groupedRawData = queue.remove(0);
+					busy.set(true);
+					try {
+						ArrayList<? extends PamDataUnit> groupedRawData = queue.remove(0);
 
-					ArrayList<StandardPrediction> modelResult = dlModelWorker.runModel(groupedRawData, 
-							groupedRawData.get(0).getParentDataBlock().getSampleRate(), 0); //TODO channel?
+						ArrayList<StandardPrediction> modelResult = dlModelWorker.runModel(groupedRawData, 
+								groupedRawData.get(0).getParentDataBlock().getSampleRate(), 0); //TODO channel?
 
-					
-					newDLResult(modelResult, groupedRawData);
+
+						newDLResult(modelResult, groupedRawData);
+					}
+					finally {
+						busy.set(false);
+					}
 //					for (int i =0; i<modelResult.size(); i++) {
 ////						modelResult.get(i).setClassNameID(getClassNameIDs()); 
 ////						modelResult.get(i).setBinaryClassification(isBinaryResult(modelResult.get(i))); 
@@ -76,6 +89,31 @@ public abstract class DLTaskThread extends Thread {
 		}
 	}
 	
+	/**
+	 * Wait until the queue is empty and no batch is being classified, so that results from
+	 * the last batches reach the data blocks before PAMGuard closes its output files.
+	 * @param timeoutMillis - longest time to wait.
+	 * @return true if the thread became idle, false if the wait timed out.
+	 */
+	public boolean waitUntilIdle(long timeoutMillis) {
+		long endTime = System.currentTimeMillis() + timeoutMillis;
+		while (queue.size() > 0 || busy.get()) {
+			if (!run.get() || !isAlive()) {
+				return true;
+			}
+			if (System.currentTimeMillis() > endTime) {
+				return false;
+			}
+			try {
+				Thread.sleep(1);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				return false;
+			}
+		}
+		return true;
+	}
+
 	/**
 	 * Called whenever there is a new result. ArrayList<StandardPrediction> modelResult 
 	 * @param soundSpotResult - the new result.

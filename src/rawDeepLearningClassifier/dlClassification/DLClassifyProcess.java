@@ -494,6 +494,30 @@ public class DLClassifyProcess extends PamProcess {
 
 
 	/**
+	 * Longest span of audio, in milliseconds, whose segments are sent to the model in one call
+	 * when analysing sound files. Results can arrive late with sound files, and larger batches
+	 * make far fewer model calls, each with a fixed overhead. Results can reach downstream
+	 * modules up to about three times this late (one batch filling, one queued, one being
+	 * classified), so three times this must stay well inside the raw audio history they keep:
+	 * DIFAR keeps 120 s by default.
+	 */
+	private static final double SOUND_FILE_BUFFER_TIME = 20000.0;
+
+	/**
+	 * Longest span of audio, in milliseconds, whose segments are sent to the model in one call.
+	 * The setting (default 1 s) when acquiring in real time, so results stay prompt. When
+	 * analysing sound files, the longer of the setting and SOUND_FILE_BUFFER_TIME.
+	 * @return buffer time in milliseconds.
+	 */
+	private double getMaxBufferTime() {
+		double bufferTime = dlControl.getDLParams().maxBufferTime;
+		if (PamCalendar.isSoundFile()) {
+			bufferTime = Math.max(bufferTime, SOUND_FILE_BUFFER_TIME);
+		}
+		return bufferTime;
+	}
+
+	/**
 	 * Check whether the buffer is full and the results should be passed to the classification model if we are using GrpoupDataUnits
 	 * @param classificationBuffer2 - the classification buffer. 
 	 * @param rawDataUnit  - the next raw data unit to add to the buffer. 
@@ -524,8 +548,7 @@ public class DLClassifyProcess extends PamProcess {
 
 		double timeDiff = rawDataUnit.getTimeMilliseconds()-min; 
 
-		if (timeDiff>=this.dlControl.getDLParams().maxBufferTime) {
-			//		if (timeDiff>=this.dlControl.getDLParams().maxBufferTime) {
+		if (timeDiff>=getMaxBufferTime()) {
 
 			//we are over the max buffer size. 
 			//System.out.println("DLClassifyProcess: warning:  buffer is over max time gap"); 
@@ -569,6 +592,11 @@ public class DLClassifyProcess extends PamProcess {
 	 * when data return, not for every segment.
 	 */
 	private int zeroDataChannels = 0;
+
+	/**
+	 * Longest time, in milliseconds, that pamStop waits for the model to finish queued batches.
+	 */
+	private static final long STOP_WAIT_TIME = 120000;
 
 
 
@@ -986,6 +1014,16 @@ public class DLClassifyProcess extends PamProcess {
 			if (classificationBuffer.get(0) instanceof SegmenterDetectionGroup) {
 				runDetectionGroupModel(); //any other data units. 
 			}
+		}
+		/*
+		 * When analysing sound files the model may still be working through queued batches on
+		 * its own thread. Wait for them here: PAMGuard closes its binary files only after every
+		 * module's pamStop, so results (and anything they trigger downstream, such as DIFAR
+		 * clips saved unattended) still reach their files.
+		 */
+		if (!this.dlControl.getDLModel().waitForResults(STOP_WAIT_TIME)) {
+			System.out.printf("DLClassifyProcess: %s still classifying %d s after Stop; later results may not be saved%n",
+					dlControl.getUnitName(), STOP_WAIT_TIME/1000);
 		}
 		//21/11/2022 - it seems like this causes a memory leak when models are reopened and closed every file...
 		//this.dlControl.getDLModel().closeModel(); 

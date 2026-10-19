@@ -31,7 +31,14 @@ import warnings.WarningSystem;
  */
 public abstract class StandardClassifierModel implements DLClassiferModel, PamSettings {
 
-	private static final int OFFLINE_FILE_QUEUE_SIZE = 2; //don't let the deep elarning get very far behind at all with a sound file.
+	/**
+	 * When analysing sound files, the next batch waits until the queue is empty, so one batch
+	 * is queued while another is classified. That keeps the model busy. Each batch can hold
+	 * up to DLClassifyProcess's sound file buffer time of audio, and a longer queue would let
+	 * results fall further behind the audio than downstream modules (e.g. DIFAR) keep it.
+	 * Was 2 (up to three batches queued) when batches held about one segment each.
+	 */
+	private static final int OFFLINE_FILE_QUEUE_SIZE = 0;
 
 
 	protected DLControl dlControl;
@@ -173,6 +180,14 @@ public abstract class StandardClassifierModel implements DLClassiferModel, PamSe
 	}
 	
 	
+	@Override
+	public boolean waitForResults(long timeoutMillis) {
+		if (workerThread == null) {
+			return true;
+		}
+		return workerThread.waitUntilIdle(timeoutMillis);
+	}
+
 	/**
 	 * Get the maximum queue size which depends on whether we are analysing a sound file or real time data.
 	 * @return the maximum queue size. 
