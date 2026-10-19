@@ -494,30 +494,6 @@ public class DLClassifyProcess extends PamProcess {
 
 
 	/**
-	 * Longest span of audio, in milliseconds, whose segments are sent to the model in one call
-	 * when analysing sound files. Results can arrive late with sound files, and larger batches
-	 * make far fewer model calls, each with a fixed overhead. Results can reach downstream
-	 * modules up to about three times this late (one batch filling, one queued, one being
-	 * classified), so three times this must stay well inside the raw audio history they keep:
-	 * DIFAR keeps 120 s by default.
-	 */
-	private static final double SOUND_FILE_BUFFER_TIME = 20000.0;
-
-	/**
-	 * Longest span of audio, in milliseconds, whose segments are sent to the model in one call.
-	 * The setting (default 1 s) when acquiring in real time, so results stay prompt. When
-	 * analysing sound files, the longer of the setting and SOUND_FILE_BUFFER_TIME.
-	 * @return buffer time in milliseconds.
-	 */
-	private double getMaxBufferTime() {
-		double bufferTime = dlControl.getDLParams().maxBufferTime;
-		if (PamCalendar.isSoundFile()) {
-			bufferTime = Math.max(bufferTime, SOUND_FILE_BUFFER_TIME);
-		}
-		return bufferTime;
-	}
-
-	/**
 	 * Check whether the buffer is full and the results should be passed to the classification model if we are using GrpoupDataUnits
 	 * @param classificationBuffer2 - the classification buffer. 
 	 * @param rawDataUnit  - the next raw data unit to add to the buffer. 
@@ -548,7 +524,8 @@ public class DLClassifyProcess extends PamProcess {
 
 		double timeDiff = rawDataUnit.getTimeMilliseconds()-min; 
 
-		if (timeDiff>=getMaxBufferTime()) {
+		if (timeDiff>=this.dlControl.getDLParams().maxBufferTime) {
+			//		if (timeDiff>=this.dlControl.getDLParams().maxBufferTime) {
 
 			//we are over the max buffer size. 
 			//System.out.println("DLClassifyProcess: warning:  buffer is over max time gap"); 

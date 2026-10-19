@@ -31,14 +31,7 @@ import warnings.WarningSystem;
  */
 public abstract class StandardClassifierModel implements DLClassiferModel, PamSettings {
 
-	/**
-	 * When analysing sound files, the next batch waits until the queue is empty, so one batch
-	 * is queued while another is classified. That keeps the model busy. Each batch can hold
-	 * up to DLClassifyProcess's sound file buffer time of audio, and a longer queue would let
-	 * results fall further behind the audio than downstream modules (e.g. DIFAR) keep it.
-	 * Was 2 (up to three batches queued) when batches held about one segment each.
-	 */
-	private static final int OFFLINE_FILE_QUEUE_SIZE = 0;
+	private static final int OFFLINE_FILE_QUEUE_SIZE = 2; //don't let the deep elarning get very far behind at all with a sound file.
 
 
 	protected DLControl dlControl;
