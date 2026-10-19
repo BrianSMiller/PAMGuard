@@ -112,6 +112,9 @@ public class DifarProcess extends PamProcess {
 	 */
 	private final Object clipLock = new Object();
 
+	/** Stage times of unattended clips, or null when not asked for. */
+	private DifarStageTiming stageTiming = DifarStageTiming.create();
+
 	private Simplex2D simplex2D;
 	
 	private FIRArbitraryFilter difarAmplitudeFilter;
@@ -376,10 +379,12 @@ public class DifarProcess extends PamProcess {
 		
 		
 		demuxDataUnit(difarDataUnit, demuxWorker, startTime);
+		if (timing(difarDataUnit)) stageTiming.endDemux();
 
 		calculateDifarGram(difarDataUnit, demuxWorker, startTime);
 
 		estimateTrackedGroup(difarDataUnit);
+		if (timing(difarDataUnit)) stageTiming.endGroup();
 		
 	}
 
@@ -609,10 +614,13 @@ public class DifarProcess extends PamProcess {
 				LocContents.HAS_BEARING, difarDataUnit.getChannelBitmap());
 		difarLocalisation.setBearingError(difarControl.getDifarParameters().bearingError);
 		difarDataUnit.setLocalisation(difarLocalisation);
+		if (timing(difarDataUnit)) stageTiming.endGram();
 
 		getDifarRangeInfo(difarDataUnit);
+		if (timing(difarDataUnit)) stageTiming.endMatch();
 		
 		getDifarAmplitude(difarDataUnit);
+		if (timing(difarDataUnit)) stageTiming.endAmplitude();
 		
 		
 		// an unattended clip is not shown on the DIFARgram, so it sends no message
@@ -1106,12 +1114,16 @@ public class DifarProcess extends PamProcess {
 	@Override
 	public void pamStart() {
 		setDataKeepTimes();
+		if (stageTiming != null) {
+			stageTiming.startRun();
+		}
 	}
 
 	@Override
 	public void pamStop() {
-		
-
+		if (stageTiming != null) {
+			stageTiming.close();
+		}
 	}
 	
 	/**
@@ -1304,21 +1316,41 @@ public class DifarProcess extends PamProcess {
 	 * @param difarDataUnit the clip, in the queue.
 	 */
 	private void processUnattended(DifarDataUnit difarDataUnit) {
+		long lockRequested = System.nanoTime();
 		synchronized (clipLock) {
+			if (stageTiming != null) {
+				stageTiming.begin(difarDataUnit, lockRequested);
+			}
 			try {
 				processDifarUnit(difarDataUnit, null);
 			}
 			catch (Exception e) {
 				// as the DIFARgram's worker does: report it, and leave the clip in the queue
 				e.printStackTrace();
+				endTiming(difarDataUnit, "error");
 				return;
 			}
 			if (!difarDataUnit.canAutoSave()) {
 				System.out.printf("DIFAR: clip at %s has no bearing, so is left in the queue\n",
 						PamCalendar.formatDBDateTime(difarDataUnit.getTimeMilliseconds()));
+				endTiming(difarDataUnit, "no bearing");
 				return;
 			}
 			difarControl.saveUnattended(difarDataUnit);
+			endTiming(difarDataUnit, "saved");
+		}
+	}
+
+	/**
+	 * @return true if this clip's stages are being timed (see {@link DifarStageTiming}).
+	 */
+	private boolean timing(DifarDataUnit difarDataUnit) {
+		return stageTiming != null && stageTiming.isTiming(difarDataUnit);
+	}
+
+	private void endTiming(DifarDataUnit difarDataUnit, String outcome) {
+		if (timing(difarDataUnit)) {
+			stageTiming.end(outcome);
 		}
 	}
 
