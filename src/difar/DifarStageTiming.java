@@ -14,7 +14,8 @@ import PamUtils.PamCalendar;
  * {@code -Ddifar.stageTiming=<file.csv>}. Rows are appended, so several runs
  * can share one file; the run column tells them apart.
  * <p>
- * Stages, in milliseconds of wall time:
+ * wallTime is the computer's clock (UTC) when the clip finished, so DIFAR's work can be
+ * lined up with the run's progress. Stages, in milliseconds of wall time:
  * <ul>
  * <li>wait: waiting for the DIFAR clip lock (other triggers' clips ahead)</li>
  * <li>demux: demultiplexing and decimating the clip</li>
@@ -32,7 +33,7 @@ public class DifarStageTiming {
 	public static final String PROPERTY = "difar.stageTiming";
 
 	private static final String HEADER =
-			"run,clipTime,channelMap,trigger,thread,outcome,wait,demux,gram,match,amplitude,group,save,total";
+			"run,clipTime,channelMap,trigger,thread,outcome,wait,demux,gram,match,amplitude,group,save,total,wallTime";
 
 	private final File file;
 
@@ -105,14 +106,15 @@ public class DifarStageTiming {
 		}
 		save = lap();
 		long total = tLast - tStart;
-		write(String.format("%s,%s,%d,%s,%s,%s,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f",
+		write(String.format("%s,%s,%d,%s,%s,%s,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s",
 				run,
 				PamCalendar.formatDBDateTime(clip.getTimeMilliseconds(), true),
 				clip.getChannelBitmap(),
 				clip.triggerName == null ? "" : clip.triggerName.replace(',', ';'),
 				Thread.currentThread().getName().replace(',', ';'),
 				outcome,
-				ms(wait), ms(demux), ms(gram), ms(match), ms(amplitude), ms(group), ms(save), ms(total)));
+				ms(wait), ms(demux), ms(gram), ms(match), ms(amplitude), ms(group), ms(save), ms(total),
+				PamCalendar.formatDBDateTime(System.currentTimeMillis(), true)));
 		clip = null;
 	}
 

@@ -34,9 +34,11 @@
 
 <p>The Greeneridge demultiplexer is more robust and better tested, but must be purchased separately. The AMMC_EXPERIMENTAL demultiplexer is included by default.</p>
 
+<p><strong>AMMC_FAST</strong> is the AMMC demultiplexer done in the frequency domain. It takes one Fourier transform of each DIFAR clip and keeps only the frequencies it needs: the omnidirectional band, the 15 kHz pilot, and the directional band beside the pilot. It then demultiplexes at the classification's sample rate rather than the recording's. It gives the same bearings as AMMC_EXPERIMENTAL to within small filter differences, and is several times faster, which matters most when automatic detectors make many DIFAR clips. As with AMMC_EXPERIMENTAL, the band demultiplexed is set by the classification's sample rate (half of it), and no time needs to be prepended to the clip. AMMC_EXPERIMENTAL remains the default while AMMC_FAST is tested.</p>
+
 <h3><a name="Data">Buffers </a></h3>
 
-<p><a name="Buffers"><b>Prepend to clip:</b> This is the amount of data (in seconds) added to the start of each DIFAR clip.&nbsp;When using the&nbsp;Greeneridge demodulator, this&nbsp;should be set to approximately 3 s or more&nbsp;to enable the phased lock loop in the DIFAR de-multiplexing module to lock onto the carrier signal. When using the AMMC demodulator, this&nbsp;should be set to 0.&nbsp;</a></p>
+<p><a name="Buffers"><b>Prepend to clip:</b> This is the amount of data (in seconds) added to the start of each DIFAR clip.&nbsp;When using the&nbsp;Greeneridge demodulator, this&nbsp;should be set to approximately 3 s or more&nbsp;to enable the phased lock loop in the DIFAR de-multiplexing module to lock onto the carrier signal. When using either AMMC demodulator (AMMC_EXPERIMENTAL or AMMC_FAST), this&nbsp;should be set to 0.&nbsp;</a></p>
 
 <p><a name="Buffers"><b>Time to keep Raw Data:</b> The time in seconds that raw data are held in memory. Once data are discarded it is no longer possible to make clips from the data for DIFAR processing. Generally a couple of minutes is adequate. Increasing this too much can cause PAMGuard to run out of memory. </a></p>
 

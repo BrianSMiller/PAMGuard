@@ -360,7 +360,12 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 	 */
 	public boolean showDifarGramFreqLimits = true;
 
-	public static enum DifarDemuxTypes{GREENERIDGE, AMMC_EXPERIMENTAL}
+	/**
+	 * AMMC_FAST: the AMMC demultiplexer done in the frequency domain at the output
+	 * sample rate (AmmcFastDemux); same results to within filter differences, much faster.
+	 * New values go at the end: settings store the name.
+	 */
+	public static enum DifarDemuxTypes{GREENERIDGE, AMMC_EXPERIMENTAL, AMMC_FAST}
 
 	public DifarDemuxTypes demuxType=DifarDemuxTypes.AMMC_EXPERIMENTAL;
 	

@@ -48,6 +48,7 @@ import difar.calibration.CalibrationHistogram;
 import difar.calibration.CalibrationLogging;
 import difar.calibration.CalibrationProcess;
 import difar.demux.AmmcDemux;
+import difar.demux.AmmcFastDemux;
 import difar.demux.DifarDemux;
 import difar.demux.DifarResult;
 import difar.demux.NativeDemux;
@@ -82,6 +83,7 @@ public class DifarProcess extends PamProcess {
 
 	private DifarDemux nativeDemux = new NativeDemux(difarControl);
 	private DifarDemux ammcDemux = new AmmcDemux();
+	private DifarDemux ammcFastDemux = new AmmcFastDemux();
 	private DifarDemux difarDemux = ammcDemux;
 	
 	private DifarDataBlock processedDifarData;
@@ -413,6 +415,10 @@ public class DifarProcess extends PamProcess {
  			break;
 		case AMMC_EXPERIMENTAL:
 			difarDemux = ammcDemux;
+			gainCorrection = 1;
+			break;
+		case AMMC_FAST:
+			difarDemux = ammcFastDemux;
 			gainCorrection = 1;
 			break;
 		}	
