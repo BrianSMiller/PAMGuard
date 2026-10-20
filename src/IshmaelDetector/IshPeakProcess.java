@@ -39,7 +39,13 @@ public class IshPeakProcess extends PamProcess
 
 	double[] outData;
 
-	long minTimeN, maxTimeN, refactoryTimeSam;	//time values converted to slice numbers
+	long maxTimeN, refactoryTimeSam;	//time values converted to slice numbers
+	/**
+	 * Minimum call duration in samples of the audio. A call's duration (durationSamples) is
+	 * measured between the start samples of its first and last slices over threshold, which
+	 * are audio samples, not slices. For the spectrogram detectors one slice is an FFT hop.
+	 */
+	long minTimeSam;
 
 	PerChannelInfo perChannelInfo[] = new PerChannelInfo[PamConstants.MAX_CHANNELS];
 
@@ -137,7 +143,8 @@ public class IshPeakProcess extends PamProcess
 		 */
 		float dRate     = ishDetControl.ishDetFnProcess.getDetSampleRate();
 
-		minTimeN        = Math.max(0, (long)(dRate * p.minTime));
+		float audioRate = ishDetControl.ishDetFnProcess.getSampleRate();
+		minTimeSam      = Math.max(0, (long)(audioRate * p.minTime));
 
 		// if maxTime==0, it means we're not using it so set the param to infinity so that we are always under it
 		if (p.maxTime==0) {
@@ -212,7 +219,7 @@ public class IshPeakProcess extends PamProcess
 					 */
 					
 				}
-				else if (chan.nOverThresh > 0 && chan.durationSamples() >= minTimeN && chan.nOverThresh<=maxTimeN) {
+				else if (chan.nOverThresh > 0 && chan.durationSamples() >= minTimeSam && chan.nOverThresh<=maxTimeN) {
 					/*
 					 * If we're here, the call duration is long enough and it's been below threshold for longer
 					 * than the minimum allowed gap, so it is time to properly end the call. 
@@ -225,7 +232,7 @@ public class IshPeakProcess extends PamProcess
 //					long startMsec = absSamplesToMilliseconds(startSam - durationSam);
 					long startMsec = absSamplesToMilliseconds(chan.startSample);
 					long endMsec = startMsec + 
-							Math.round(1000.0 * (float)durationSam * ishDetControl.ishDetFnProcess.getDetSampleRate()); 
+							Math.round(1000.0 * (double)durationSam / ishDetControl.ishDetFnProcess.getSampleRate()); 
 					float lowFreq = ishDetControl.ishDetFnProcess.getLoFreq();
 					float highFreq = ishDetControl.ishDetFnProcess.getHiFreq();
 
