@@ -1363,8 +1363,8 @@ public class DifarParamsDialog extends PamDialog {
 				}
 				c.gridy++;
 				c.gridx = 0;
-				// the long name, since modules of one type share a data name (e.g. DL Classifier Data)
-				this.add(dataLabels[i] = new JLabel(aDataBlock.getLongDataName() + " ", SwingConstants.RIGHT), c);
+				// not the plain data name, which modules of one type share (e.g. DL Classifier Data)
+				this.add(dataLabels[i] = new JLabel(DifarParameters.triggerName(aDataBlock) + " ", SwingConstants.RIGHT), c);
 				c.gridx++;
 				c.anchor = GridBagConstraints.CENTER;
 				this.add(enableBoxes[i] = new JCheckBox(), c);
@@ -1425,10 +1425,10 @@ public class DifarParamsDialog extends PamDialog {
 					continue;
 				}
 				if (triggerParams[i] == null) {
-					triggerParams[i] = difarParameters.new DifarTriggerParams(aDataBlock.getLongDataName());
+					triggerParams[i] = difarParameters.new DifarTriggerParams(DifarParameters.triggerName(aDataBlock));
 				}
 				triggerParams[i].enable = enableBoxes[i].isSelected();
-				triggerParams[i].dataName = aDataBlock.getLongDataName();
+				triggerParams[i].dataName = DifarParameters.triggerName(aDataBlock);
 				triggerParams[i].speciesName = speciesLookups[i].getSelectedItem().toString();
 				if (speciesLookups[i].getSelectedItem() == defaultItem){
 						triggerParams[i].speciesLookupItem = null;

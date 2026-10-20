@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import Filters.FilterParams;
 import Filters.FilterType;
 import PamModel.parametermanager.ManagedParameters;
+import PamController.PamControlledUnit;
 import PamguardMVC.PamDataBlock;
 import PamModel.parametermanager.PamParameterSet;
 import PamModel.parametermanager.PamParameterSet.ParameterSetType;
@@ -886,15 +887,41 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 
 
 	/**
+	 * The name DIFAR uses for a trigger data block: in the Automation panel,
+	 * to store its settings, and in each clip's TriggerName column.
+	 * <p>
+	 * It must tell apart blocks that share a data name, as several Deep
+	 * Learning classifiers all make "DL Classifier Data". So it is the long
+	 * name (module name and data name), unless the data name already contains
+	 * the module name, as for Ishmael detectors ("Ishmael spectrogram
+	 * correlation Bp20 00500 events"), where the long name would repeat it.
+	 * @param dataBlock trigger data block
+	 * @return the name, or null for a null block.
+	 */
+	public static String triggerName(PamDataBlock dataBlock) {
+		if (dataBlock == null) {
+			return null;
+		}
+		String dataName = dataBlock.getDataName();
+		PamControlledUnit unit = null;
+		if (dataBlock.getParentProcess() != null) {
+			unit = dataBlock.getParentProcess().getPamControlledUnit();
+		}
+		if (unit != null && dataName != null && dataName.contains(unit.getUnitName())) {
+			return dataName;
+		}
+		return dataBlock.getLongDataName();
+	}
+
+	/**
 	 * Find the trigger parameters for a data block.
 	 * <p>
-	 * Triggers are stored by the block's long name (module name and data
-	 * name), because several modules of one type give their output blocks the
-	 * same data name: three Deep Learning classifiers all make "DL Classifier
-	 * Data". Settings saved before this used the short data name, so if there
-	 * is no long-name match, a short-name match is returned as a new copy
-	 * keyed by the long name. A copy, so that blocks sharing a short name do
-	 * not share, and overwrite, one set of settings.
+	 * Triggers are stored by {@link #triggerName(PamDataBlock)}. Settings saved
+	 * earlier may use the long name, or the plain data name (before October
+	 * 2026, which could not tell apart blocks with the same data name). Those
+	 * are matched too, and returned as a new copy keyed by the trigger name,
+	 * so that blocks sharing a data name do not share, and overwrite, one set
+	 * of settings. Saving the Automation panel rewrites them.
 	 * @param dataBlock trigger data block
 	 * @return trigger parameters, or null if there are none for this block.
 	 */
@@ -902,16 +929,19 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 		if (dataBlock == null) {
 			return null;
 		}
-		String longName = dataBlock.getLongDataName();
-		DifarTriggerParams tp = findTriggerParams(longName);
+		String name = triggerName(dataBlock);
+		DifarTriggerParams tp = findTriggerParams(name);
 		if (tp != null) {
 			return tp;
 		}
-		DifarTriggerParams old = findTriggerParams(dataBlock.getDataName());
+		DifarTriggerParams old = findTriggerParams(dataBlock.getLongDataName());
+		if (old == null) {
+			old = findTriggerParams(dataBlock.getDataName());
+		}
 		if (old == null) {
 			return null;
 		}
-		DifarTriggerParams copy = new DifarTriggerParams(longName);
+		DifarTriggerParams copy = new DifarTriggerParams(name);
 		copy.enable = old.enable;
 		copy.speciesName = old.speciesName;
 		copy.speciesLookupItem = old.speciesLookupItem;

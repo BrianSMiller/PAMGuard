@@ -1012,7 +1012,7 @@ public class DifarProcess extends PamProcess {
 		
 		SpeciesParams sP = difarControl.difarParameters.findSpeciesParams(DifarParameters.Default);
 
-		difarTrigger(pd.getChannelBitmap(), pd.getTimeMilliseconds(), duration, f, pd, sP.sampleRate, triggerSpeciesName, db.getLongDataName());
+		difarTrigger(pd.getChannelBitmap(), pd.getTimeMilliseconds(), duration, f, pd, sP.sampleRate, triggerSpeciesName, DifarParameters.triggerName(db));
 	}
 
 	@Override
