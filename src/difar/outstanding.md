@@ -174,6 +174,12 @@ Still open:
   `pamStop`, so waiting there is enough. PAMGuard restarts the classifier at every file, so the
   wait also runs at each file boundary. Test: rerun the pilot and check for no "in file null" and
   no "still classifying" in the console.
+  **Tested 20 October 2026 (run 4, five triggers, three models): not fixed.** Nine "Storing
+  binary object ... from DL Model Data in file null with no module header" lines at the end of the
+  audio (06:10:08 to 06:10:30), three per model, and no "still classifying". So the wait covers the
+  detections but not the Model Data stream, or the end of the audio does not go through the same
+  path as Stop. Small: the last few predictions of a run are lost from the binary files. Not yet
+  traced.
 - The classifier also warns, many times a run, that its raw data are shorter than its model
   results' time limits, always by 600 samples (2.4 s at 250 Hz). Nothing is trimmed, so detections
   keep their audio. Cause not traced. A guess: merged segments overlap (window 1,125 samples, hop
