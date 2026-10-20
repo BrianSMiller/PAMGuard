@@ -1004,20 +1004,15 @@ public class DifarProcess extends PamProcess {
 		// This is getting to be quite a convoluted mess, and should probably be refactored.
 		// Maybe need a new class to consolidate triggerParams, triggerSpeciesName, speciesParams,
 		// triggerObservers -- basically all paramters for species, triggers, and lookupTables...
-		int nBlocks = difarControl.difarParameters.getNumTriggersEnabled();
-		for (int i = 0; i < nBlocks; i++) {
-			DifarTriggerParams triggerParams = difarControl.difarParameters.getTriggerParams(i);
-			
-			if (db.getDataName().equals(triggerParams.dataName)){
-				triggerSpeciesName = triggerParams.speciesName;
-				//System.out.println("The datablock was from " + dataName + " and will be treated as " + triggerSpeciesName);
-			}
-
+		// by the block's long name, since modules of one type share a data name
+		DifarTriggerParams triggerParams = difarControl.difarParameters.findTriggerParams(db);
+		if (triggerParams != null) {
+			triggerSpeciesName = triggerParams.speciesName;
 		}
 		
 		SpeciesParams sP = difarControl.difarParameters.findSpeciesParams(DifarParameters.Default);
 
-		difarTrigger(pd.getChannelBitmap(), pd.getTimeMilliseconds(), duration, f, pd, sP.sampleRate, triggerSpeciesName, db.getDataName());
+		difarTrigger(pd.getChannelBitmap(), pd.getTimeMilliseconds(), duration, f, pd, sP.sampleRate, triggerSpeciesName, db.getLongDataName());
 	}
 
 	@Override

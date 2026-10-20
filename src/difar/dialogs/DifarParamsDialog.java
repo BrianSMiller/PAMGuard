@@ -1363,7 +1363,8 @@ public class DifarParamsDialog extends PamDialog {
 				}
 				c.gridy++;
 				c.gridx = 0;
-				this.add(dataLabels[i] = new JLabel(aDataBlock.getDataName() + " ", SwingConstants.RIGHT), c);
+				// the long name, since modules of one type share a data name (e.g. DL Classifier Data)
+				this.add(dataLabels[i] = new JLabel(aDataBlock.getLongDataName() + " ", SwingConstants.RIGHT), c);
 				c.gridx++;
 				c.anchor = GridBagConstraints.CENTER;
 				this.add(enableBoxes[i] = new JCheckBox(), c);
@@ -1400,7 +1401,7 @@ public class DifarParamsDialog extends PamDialog {
 				if (aDataBlock.isCanClipGenerate() == false) {
 					continue;
 				}
-				cgs = difarParameters.findTriggerParams(acousticDataBlocks.get(i).getDataName());
+				cgs = difarParameters.findTriggerParams(aDataBlock);
 				triggerParams[i] = cgs;
 				if (triggerParams[i] == null) continue;
 				enableBoxes[i].setSelected(cgs != null && cgs.enable);
@@ -1424,10 +1425,10 @@ public class DifarParamsDialog extends PamDialog {
 					continue;
 				}
 				if (triggerParams[i] == null) {
-					triggerParams[i] = difarParameters.new DifarTriggerParams(aDataBlock.getDataName());
+					triggerParams[i] = difarParameters.new DifarTriggerParams(aDataBlock.getLongDataName());
 				}
 				triggerParams[i].enable = enableBoxes[i].isSelected();
-				triggerParams[i].dataName = aDataBlock.getDataName();
+				triggerParams[i].dataName = aDataBlock.getLongDataName();
 				triggerParams[i].speciesName = speciesLookups[i].getSelectedItem().toString();
 				if (speciesLookups[i].getSelectedItem() == defaultItem){
 						triggerParams[i].speciesLookupItem = null;

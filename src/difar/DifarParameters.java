@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import Filters.FilterParams;
 import Filters.FilterType;
 import PamModel.parametermanager.ManagedParameters;
+import PamguardMVC.PamDataBlock;
 import PamModel.parametermanager.PamParameterSet;
 import PamModel.parametermanager.PamParameterSet.ParameterSetType;
 import PamModel.parametermanager.PrivatePamParameterData;
@@ -883,6 +884,40 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 		return null;
 	}
 
+
+	/**
+	 * Find the trigger parameters for a data block.
+	 * <p>
+	 * Triggers are stored by the block's long name (module name and data
+	 * name), because several modules of one type give their output blocks the
+	 * same data name: three Deep Learning classifiers all make "DL Classifier
+	 * Data". Settings saved before this used the short data name, so if there
+	 * is no long-name match, a short-name match is returned as a new copy
+	 * keyed by the long name. A copy, so that blocks sharing a short name do
+	 * not share, and overwrite, one set of settings.
+	 * @param dataBlock trigger data block
+	 * @return trigger parameters, or null if there are none for this block.
+	 */
+	public DifarTriggerParams findTriggerParams(PamDataBlock dataBlock) {
+		if (dataBlock == null) {
+			return null;
+		}
+		String longName = dataBlock.getLongDataName();
+		DifarTriggerParams tp = findTriggerParams(longName);
+		if (tp != null) {
+			return tp;
+		}
+		DifarTriggerParams old = findTriggerParams(dataBlock.getDataName());
+		if (old == null) {
+			return null;
+		}
+		DifarTriggerParams copy = new DifarTriggerParams(longName);
+		copy.enable = old.enable;
+		copy.speciesName = old.speciesName;
+		copy.speciesLookupItem = old.speciesLookupItem;
+		copy.channelSelection = old.channelSelection;
+		return copy;
+	}
 
 	/**
 	 * Clear all trigger parameters. 
