@@ -6,12 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import difar.demux.AmmcDemux;
-import difar.demux.AmmcFastDemux;
+import difar.demux.AadFastDemux;
 import difar.demux.DifarResult;
 import fftManager.FastFFT;
 
 /**
- * Tests for the frequency-domain AMMC demultiplexer, against known signals and against
+ * Tests for the frequency-domain AAD demultiplexer, against known signals and against
  * AmmcDemux.
  * <p>
  * Clips are synthetic DIFAR multiplexes at 48 kHz, decimated by 192 to 250 Hz as for
@@ -20,7 +20,7 @@ import fftManager.FastFFT;
  * channels (NS = omni cos(bearing), EW = omni sin(bearing)) multiplexed on the phase
  * pilot so that AmmcDemux returns them. No PAMGuard runtime is needed.
  */
-public class AmmcFastDemuxTest {
+public class AadFastDemuxTest {
 
 	private static final double FS = 48000;
 	private static final int D = 192;
@@ -70,7 +70,7 @@ public class AmmcFastDemuxTest {
 	@Test
 	void recoversOmniAndDirectionalChannels() {
 		Clip c = new Clip(10, 250);
-		DifarResult r = new AmmcFastDemux().processClip(c.x, FS, D, null, null);
+		DifarResult r = new AadFastDemux().processClip(c.x, FS, D, null, null);
 		double scale = (double) FastFFT.nextBinaryExp(c.x.length) / c.x.length;
 		int k = r.getOm().length, e = k / 10;
 		assertEquals(c.x.length / D, k);
@@ -89,7 +89,7 @@ public class AmmcFastDemuxTest {
 	@Test
 	void bearingsMatchAmmcDemux() {
 		AmmcDemux old = new AmmcDemux();
-		AmmcFastDemux fast = new AmmcFastDemux();
+		AadFastDemux fast = new AadFastDemux();
 		for (double b : new double[] {0, 30, 135, 250, 310}) {
 			Clip c = new Clip(7.3, b);
 			double bOld = bearing(old.processClip(c.x, FS, D, null, null));
@@ -101,7 +101,7 @@ public class AmmcFastDemuxTest {
 
 	@Test
 	void silentClipGivesZerosNotNaN() {
-		DifarResult r = new AmmcFastDemux().processClip(new double[48000], FS, D, null, null);
+		DifarResult r = new AadFastDemux().processClip(new double[48000], FS, D, null, null);
 		for (double v : r.getEw()) {
 			assertEquals(0, v);
 		}
@@ -111,7 +111,7 @@ public class AmmcFastDemuxTest {
 	void fasterThanAmmcDemux() {
 		Clip c = new Clip(41.7, 310);   // a long Koogu song clip
 		AmmcDemux old = new AmmcDemux();
-		AmmcFastDemux fast = new AmmcFastDemux();
+		AadFastDemux fast = new AadFastDemux();
 		old.processClip(c.x, FS, D, null, null);   // warm up both
 		fast.processClip(c.x, FS, D, null, null);
 		long t0 = System.nanoTime();
@@ -124,7 +124,7 @@ public class AmmcFastDemuxTest {
 		}
 		long t2 = System.nanoTime();
 		double msOld = (t1 - t0) / 3e6, msFast = (t2 - t1) / 3e6;
-		System.out.printf("41.7 s clip: AmmcDemux %.1f ms, AmmcFastDemux %.1f ms (%.1f times faster)%n",
+		System.out.printf("41.7 s clip: AmmcDemux %.1f ms, AadFastDemux %.1f ms (%.1f times faster)%n",
 				msOld, msFast, msOld / msFast);
 		assertTrue(msFast < msOld, "fast " + msFast + " ms, old " + msOld + " ms");
 	}

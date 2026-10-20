@@ -12,9 +12,10 @@ import edu.emory.mathcs.jtransforms.fft.DoubleFFT_1D;
 import fftManager.FastFFT;
 
 /**
- * The AMMC demultiplexer, done in the frequency domain at the output sample rate.
+ * The AAD demultiplexer, done in the frequency domain at the output sample rate
+ * ("AAD fast (frequency domain)" in DIFAR settings).
  * <p>
- * {@link AmmcDemux} demodulates every sample of a DIFAR clip at the full sample rate,
+ * {@link AmmcDemux} ("AAD (time domain)") demodulates every sample of a DIFAR clip at the full sample rate,
  * with about nine full-length FFTs and three IIR filters, and then keeps one sample in
  * D. This class takes one FFT of the clip and cuts from it only the bins the output
  * needs, shifting each slice to baseband and inverse transforming it at the output rate:
@@ -45,7 +46,7 @@ import fftManager.FastFFT;
  * that varies with clip length. Bearings do not depend on it; the DIFARgram's shape does.
  * Kept so that the two demultiplexers can be compared clip by clip.
  */
-public class AmmcFastDemux extends DifarDemux {
+public class AadFastDemux extends DifarDemux {
 
 	/** Frequency pilot, Hz, and the half width searched for it. */
 	private static final double FREQ_PILOT = 7500, PILOT_SEARCH = 100;

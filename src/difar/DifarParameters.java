@@ -361,11 +361,32 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 	public boolean showDifarGramFreqLimits = true;
 
 	/**
-	 * AMMC_FAST: the AMMC demultiplexer done in the frequency domain at the output
-	 * sample rate (AmmcFastDemux); same results to within filter differences, much faster.
-	 * New values go at the end: settings store the name.
+	 * Demultiplexers. Settings store the constant's name, so names never change and new
+	 * ones go at the end; what users see is the display name.
+	 * <ul>
+	 * <li>GREENERIDGE: Greeneridge Sciences' library, a phase-locked loop; licensed separately</li>
+	 * <li>AMMC_EXPERIMENTAL: the AAD demultiplexer, in the time domain (AmmcDemux). Named when
+	 * it was new, at the Australian Marine Mammal Centre; in use on voyages since about 2015</li>
+	 * <li>AAD_FAST: the AAD demultiplexer in the frequency domain, at the output sample rate
+	 * (AadFastDemux); the same results to within filter differences, and much faster</li>
+	 * </ul>
 	 */
-	public static enum DifarDemuxTypes{GREENERIDGE, AMMC_EXPERIMENTAL, AMMC_FAST}
+	public static enum DifarDemuxTypes {
+		GREENERIDGE("Greeneridge (PLL; licensed library)"),
+		AMMC_EXPERIMENTAL("AAD (time domain)"),
+		AAD_FAST("AAD fast (frequency domain)");
+
+		private final String displayName;
+
+		DifarDemuxTypes(String displayName) {
+			this.displayName = displayName;
+		}
+
+		@Override
+		public String toString() {
+			return displayName;
+		}
+	}
 
 	public DifarDemuxTypes demuxType=DifarDemuxTypes.AMMC_EXPERIMENTAL;
 	
