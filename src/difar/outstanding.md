@@ -228,6 +228,50 @@ What we learned:
 Not pursued: parallel PAMGuard runs over parts of a dataset (the Batch Processor), and detecting
 in Python then importing detections for DIFAR. Both stay options for the full reanalysis.
 
+## Five triggers on the 2013 pilot: 20 and 21 October 2026
+
+Five detectors trigger DIFAR on the 2013 pilot (18 h of 3-channel audio, 8 buoys): Koogu song,
+D-call and fin 20 Hz, and spectrogram correlation for song and fin 20 Hz. No displays, "As fast as
+possible, with no review", stage timing on (`-Ddifar.stageTiming`, `DifarStageTiming`). The test
+and its benchmark log are in `pamguard-tests`, `2013-abwv-pilot/multi-detector`.
+
+| Run | Change | Wall time | Real time | DIFAR busy | Demux | Save | Clips | Triangulations |
+|---|---|---|---|---|---|---|---|---|
+| 4 | five triggers, AAD time domain demux (`e0c811e3`) | 2457 s | 26 times | 1670 s | 1215 s | 340 s | 6667 | 1156 |
+| 5 | AAD fast demux (`52860b34`) | 1242 s | 52 times | 552 s | 111 s | 324 s | 6667 | 1151 |
+| 6 | Ishmael minimum time fixed, 16 GB heap, short DIFAR keep times (`04263e57`) | 1361 s | 48 times | 607 s | 112 s | 374 s | 5807 | 1044 |
+
+Run 4's wall time is to its last clip; PAMGuard was closed by hand much later.
+
+What we learned:
+- **The demux was most of DIFAR's time.** The new AAD fast demux (`AadFastDemux`, frequency
+  domain, at the output rate) is 11 times faster on the pilot and 17 times on one 42 s clip, and
+  doubles the speed of the whole run. Bearings match the time domain demux: run 5 against run 4,
+  same clips and triangulations, apart from the pinned clips below.
+- **Pinned bearings at exactly 180 and 270 degrees** come from clips shorter than the DIFARgram
+  FFT. Zero padding makes the Bartlett surface symmetric, and the tie goes to the first maximum.
+  Not caused by either demux, and not a missing pilot tone. To handle in the quality gate below.
+- **The Ishmael minimum time was applied in FFT slices, not seconds,** in PAMGuard 2.02.15 to
+  2.02.19 (PR #159). Fixed on `ishmael-peak-picker` (see `IshPeakPicker`). Run 6 against run 5:
+  the only change is 855 song and 5 fin spectrogram correlation clips gone, all shorter than
+  their minimum time; matched bearings and positions identical. Old results can be reproduced
+  on a fixed PAMGuard by setting the minimum time to the old value divided by the FFT hop.
+- **Now the save step is slowest, and it slows as the run goes.** In run 6 the median save per
+  clip grows from 4 ms to 178 ms over the first 15 minutes of wall time, for every trigger alike,
+  then drops to 18 ms and grows again. Run 5 shows the same, less smoothly. Memory is not the
+  cause (16 GB heap, plenty free). Not found by reading `CrossingRecorder` or the data keep
+  times. Something accumulates and is then cleared, perhaps at a binary file or database
+  boundary. **Next:** time the parts of the save step, or a Java Flight Recorder run on the
+  pilot.
+
+### DIFAR quality gate (parked)
+
+Not started. In unattended mode, a clip that fails a check should still be saved, without a
+bearing, and not used in triangulation. Checks to start with: clip shorter than the DIFARgram
+FFT (the pinned bearings), and pilot tone SNR too low. Brian's idea for later: such a clip could
+still join a triangulation by time delay alone. How often each check fires decides whether that
+is worth it.
+
 ## Code, before or after the pull request
 
 - Reprocessing over existing binaries. A Normal mode rerun over the same data time overwrites every
