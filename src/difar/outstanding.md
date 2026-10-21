@@ -178,8 +178,16 @@ Still open:
   binary object ... from DL Model Data in file null with no module header" lines at the end of the
   audio (06:10:08 to 06:10:30), three per model, and no "still classifying". So the wait covers the
   detections but not the Model Data stream, or the end of the audio does not go through the same
-  path as Stop. Small: the last few predictions of a run are lost from the binary files. Not yet
-  traced.
+  path as Stop. Small: the last few predictions of a run are lost from the binary files.
+  **Traced 21 October 2026.** PAMGuard stops in three steps: `pamStop` on every module, then
+  `flushDataBlockBuffers` empties the queues between modules (multithreaded runs), then
+  `pamHasStopped` closes the binary files. The last 20 s or so of audio is still queued at
+  `pamStop`, so it reaches the classifier only in the flush, and nothing waited for it there.
+  Detections take the same path, so they can be lost too. Also, `pamStop` ran the leftover input
+  buffer without emptying it, so a later batch could classify the same segments again.
+  **Fix:** `DLClassifyProcess` overrides `flushDataBlockBuffers` to run the leftover buffer and
+  wait for the worker; `runRemainingData` empties the buffer after running it. Test: rerun the
+  pilot and check for no "in file null" and no "still classifying" in the console.
 - The classifier also warns, many times a run, that its raw data are shorter than its model
   results' time limits, always by 600 samples (2.4 s at 250 Hz). Nothing is trimmed, so detections
   keep their audio. Cause not traced. A guess: merged segments overlap (window 1,125 samples, hop

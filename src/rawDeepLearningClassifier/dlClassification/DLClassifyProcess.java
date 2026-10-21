@@ -984,26 +984,53 @@ public class DLClassifyProcess extends PamProcess {
 	@Override
 	public void pamStop() {
 		//make sure to run the last data in the buffer.
-		if (this.classificationBuffer.size()>0) {
-			if (classificationBuffer.get(0) instanceof GroupedRawData) {
-				runRawModel(); //raw data or raw data units
-			}
-			if (classificationBuffer.get(0) instanceof SegmenterDetectionGroup) {
-				runDetectionGroupModel(); //any other data units. 
-			}
+		runRemainingData();
+		waitForModel();
+		//21/11/2022 - it seems like this causes a memory leak when models are reopened and closed every file...
+		//this.dlControl.getDLModel().closeModel();
+	}
+
+	/**
+	 * Called by PamController after every module's pamStop, while it empties the queues between
+	 * modules (multithreaded runs only). Audio still queued at pamStop reaches the segmenter and
+	 * this process only now, so classify it here and wait for the model, before PAMGuard closes
+	 * its binary files in pamHasStopped. Modules flush in order, so upstream modules and this
+	 * module's segmenter have already emptied their queues.
+	 */
+	@Override
+	public boolean flushDataBlockBuffers(long maxWait) {
+		runRemainingData();
+		waitForModel();
+		return super.flushDataBlockBuffers(maxWait);
+	}
+
+	/**
+	 * Classify whatever is left in the classification buffer, then empty it, so that the same
+	 * segments are not classified again with the next batch.
+	 */
+	private void runRemainingData() {
+		if (this.classificationBuffer.size()<=0) {
+			return;
 		}
-		/*
-		 * When analysing sound files the model may still be working through queued batches on
-		 * its own thread. Wait for them here: PAMGuard closes its binary files only after every
-		 * module's pamStop, so results (and anything they trigger downstream, such as DIFAR
-		 * clips saved unattended) still reach their files.
-		 */
+		if (classificationBuffer.get(0) instanceof GroupedRawData) {
+			runRawModel(); //raw data or raw data units
+		}
+		else if (classificationBuffer.get(0) instanceof SegmenterDetectionGroup) {
+			runDetectionGroupModel(); //any other data units.
+		}
+		classificationBuffer.clear();
+	}
+
+	/**
+	 * When analysing sound files the model may still be working through queued batches on its
+	 * own thread. Wait for them, so that results (and anything they trigger downstream, such as
+	 * DIFAR clips saved unattended) reach their binary files before the files close.
+	 */
+	private void waitForModel() {
 		if (!this.dlControl.getDLModel().waitForResults(STOP_WAIT_TIME)) {
 			System.out.printf("DLClassifyProcess: %s still classifying %d s after Stop; later results may not be saved%n",
 					dlControl.getUnitName(), STOP_WAIT_TIME/1000);
 		}
-		//21/11/2022 - it seems like this causes a memory leak when models are reopened and closed every file...
-		//this.dlControl.getDLModel().closeModel(); 
 	}
 
 	/**
