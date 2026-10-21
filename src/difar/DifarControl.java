@@ -71,7 +71,6 @@ import difar.offline.UpgradeTask;
 import difar.offline.ViewerClipStore;
 import difar.plots.DifarBearingPlotProvider;
 import difar.plots.DifarIntensityPlotProvider;
-import difar.trackedGroups.TrackedGroupProcess;
 import difar.offline.ViewerEdits;
 import generalDatabase.lookupTables.LookupItem;
 import generalDatabase.lookupTables.LookupList;
@@ -80,6 +79,9 @@ import offlineProcessing.OfflineTaskGroup;
 import offlineProcessing.TaskGroupParams;
 import userDisplay.UserDisplayControl;
 import warnings.PamWarning;
+import warnings.WarningSystem;
+import generalDatabase.DBControlUnit;
+import generalDatabase.EmptyTableDefinition;
 
 public class DifarControl extends PamControlledUnit implements PamSettings {
 
@@ -121,7 +123,6 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 	
 	private DifarDataUnit currentDemuxedUnit = null;
 	private DifarDisplayContainer2 difarDisplayContainer2;
-	private TrackedGroupProcess trackedGroupProcess;
 
 	/** How viewer edits reach displays, files and the database; null in normal mode. */
 	private ViewerEdits viewerEdits;
@@ -139,6 +140,12 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 	
 	private static PamWarning warningMessage = new PamWarning("Difar", "", 2);
 
+	/**
+	 * The last PAMGuard version that writes and reads DIFAR tracked groups.
+	 * They were removed in the version after it.
+	 */
+	public static final String LAST_VERSION_WITH_TRACKED_GROUPS = "2.02.19";
+
 	public DifarControl(String unitName) {
 	
 		super("DIFAR Processing", unitName);
@@ -146,7 +153,6 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 		PamSettingManager.getInstance().registerSettings(this);		
 		
 		addPamProcess(difarProcess = new DifarProcess(this));
-		addPamProcess(setTrackedGroupProcess(new TrackedGroupProcess(this, difarProcess.getProcessedDifarData(), "Difar Tracked Groups")));
 		addPamProcess(sonobuoyManager = new SonobuoyManager(this));
 		sonobuoyHistorySource = new SonobuoyHistorySource(
 				sonobuoyManager.sonobuoyEndTimeAnnotation.getAnnotationName());
@@ -649,6 +655,7 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 		case PamControllerInterface.INITIALIZATION_COMPLETE:
 			sonobuoyHistorySource.connect();
 			difarProcess.setupProcess();
+			warnIfOldTrackedGroups();
 			break;
 		case PamControllerInterface.OFFLINE_DATA_LOADED:
 			sonobuoyHistorySource.markStale();
@@ -657,6 +664,28 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 		case PamControllerInterface.NEW_SCROLL_TIME:
 			sonobuoyManager.scrollTimeChanged();
 		}
+	}
+
+	/**
+	 * Tracked groups were removed from DIFAR. If the database holds a tracked
+	 * groups table from an older version, say that it is no longer read or
+	 * written, and which version still reads it. The table is left as it is.
+	 */
+	private void warnIfOldTrackedGroups() {
+		DBControlUnit dbControl = DBControlUnit.findDatabaseControl();
+		if (dbControl == null || dbControl.getDbProcess() == null) {
+			return;
+		}
+		EmptyTableDefinition oldTable = new EmptyTableDefinition(getUnitName() + "Tracked Groups");
+		if (!dbControl.getDbProcess().tableExists(oldTable)) {
+			return;
+		}
+		String message = String.format("This database has DIFAR tracked groups (table %s). "
+				+ "Tracked groups were removed after PAMGuard %s, so they are not read or written. "
+				+ "Use PAMGuard %s or earlier to view them.",
+				oldTable.getTableName(), LAST_VERSION_WITH_TRACKED_GROUPS, LAST_VERSION_WITH_TRACKED_GROUPS);
+		System.out.println("DIFAR: " + message);
+		WarningSystem.getWarningSystem().addWarning(new PamWarning(getUnitName(), message, 1));
 	}
 
 	/**
@@ -806,19 +835,6 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 		return currentDemuxedUnit;
 	}
 
-	public String getCurrentlySelectedGroup(){
-		return difarGram.getDifarGroupPanel().getCurrentlySelectedGroup();
-	}
-	
-	public void setCurrentlySelectedGroup(String groupName){
-		difarGram.getDifarGroupPanel().setCurrentlySelectedGroup(groupName);
-	}
-
-	public boolean isTrackedGroupSelectable(String groupName){
-		return difarGram.getDifarGroupPanel().isTrackedGroupSelectable(groupName);
-		
-	}
-	
 	/**
 	 * Get the appropriate symbol for the selected species (or none). 
 	 * @param difarDataUnit DIFAR data unit
@@ -840,8 +856,6 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 	public ViewerEdits getViewerEdits() {
 		if (viewerEdits == null && isViewer) {
 			viewerEdits = new ViewerEdits(this);
-			// tracked groups consume saved clips, as in normal mode
-			viewerEdits.addConsumer(trackedGroupProcess);
 		}
 		return viewerEdits;
 	}
@@ -863,15 +877,6 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 		edits.commit();
 	}
 
-	public TrackedGroupProcess getTrackedGroupProcess() {
-		return trackedGroupProcess;
-	}
-
-	public TrackedGroupProcess setTrackedGroupProcess(TrackedGroupProcess trackedGroupProcess) {
-		this.trackedGroupProcess = trackedGroupProcess;
-		return trackedGroupProcess;
-	}
-	
 	/**
 	 * Save a set of classifier params. Since this is primarily an
 	 * export function, it will always show the file save dialog

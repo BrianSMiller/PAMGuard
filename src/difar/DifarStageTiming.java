@@ -22,7 +22,6 @@ import PamUtils.PamCalendar;
  * <li>gram: calculating the DIFARgram</li>
  * <li>match: matching with clips on other buoys and triangulating</li>
  * <li>amplitude: the clip's amplitude</li>
- * <li>group: tracked group estimate</li>
  * <li>save: saving the clip and its triangulation (only for saved clips)</li>
  * </ul>
  * Only clips processed with no operator are timed. All stages run inside the
@@ -33,7 +32,7 @@ public class DifarStageTiming {
 	public static final String PROPERTY = "difar.stageTiming";
 
 	private static final String HEADER =
-			"run,clipTime,channelMap,trigger,thread,outcome,wait,demux,gram,match,amplitude,group,save,total,wallTime";
+			"run,clipTime,channelMap,trigger,thread,outcome,wait,demux,gram,match,amplitude,save,total,wallTime";
 
 	private final File file;
 
@@ -47,7 +46,7 @@ public class DifarStageTiming {
 
 	private long tStart, tLast;
 
-	private long wait, demux, gram, match, amplitude, group, save;
+	private long wait, demux, gram, match, amplitude, save;
 
 	/**
 	 * @return a timer, or null if timing is not switched on.
@@ -72,7 +71,7 @@ public class DifarStageTiming {
 	 */
 	public void begin(DifarDataUnit clip, long lockRequested) {
 		this.clip = clip;
-		demux = gram = match = amplitude = group = save = 0;
+		demux = gram = match = amplitude = save = 0;
 		tStart = lockRequested;
 		tLast = System.nanoTime();
 		wait = tLast - tStart;
@@ -94,7 +93,6 @@ public class DifarStageTiming {
 	public void endGram() { gram = lap(); }
 	public void endMatch() { match = lap(); }
 	public void endAmplitude() { amplitude = lap(); }
-	public void endGroup() { group = lap(); }
 
 	/**
 	 * Called after the clip is saved, or left in the queue. Writes the row.
@@ -106,14 +104,14 @@ public class DifarStageTiming {
 		}
 		save = lap();
 		long total = tLast - tStart;
-		write(String.format("%s,%s,%d,%s,%s,%s,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s",
+		write(String.format("%s,%s,%d,%s,%s,%s,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%s",
 				run,
 				PamCalendar.formatDBDateTime(clip.getTimeMilliseconds(), true),
 				clip.getChannelBitmap(),
 				clip.triggerName == null ? "" : clip.triggerName.replace(',', ';'),
 				Thread.currentThread().getName().replace(',', ';'),
 				outcome,
-				ms(wait), ms(demux), ms(gram), ms(match), ms(amplitude), ms(group), ms(save), ms(total),
+				ms(wait), ms(demux), ms(gram), ms(match), ms(amplitude), ms(save), ms(total),
 				PamCalendar.formatDBDateTime(System.currentTimeMillis(), true)));
 		clip = null;
 	}

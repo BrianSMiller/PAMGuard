@@ -305,13 +305,6 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 	}
 	
 	
-	private ArrayList<String> groupList = new ArrayList<String>();
-	public  ArrayList<String> getGroupDefaults(){
-		ArrayList<String> defaults = new ArrayList<String>();
-		defaults.add(DefaultGroup);
-		return defaults;
-	}
-	
 	//used for buoy calibration
 	public int vesselClipLength=10;
 	public int vesselClipSeparation=10;
@@ -393,8 +386,6 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 	public static final String Default = "Unclassified";
 
 	public static final String CalibrationClip = "Vessel";
-	
-	public static final String DefaultGroup = "No group";
 	
 	public static enum DifarOutputTypes{BARTLETT, MVDR}
 	
@@ -994,44 +985,6 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 		return triggerParams.add(tP);
 	}
 	
-	public boolean addTrackedGroup(String listItem){
-		if (groupList == null) {
-			groupList = getGroupDefaults();
-		}
-		if (groupList.contains(listItem)){
-			return false;
-		}
-		return groupList.add(listItem);
-	}
-	
-	public void removeTrackedGroup(String listItem){
-		// Make it impossible to remove the DefaultGroup
-		if (listItem.equals(DefaultGroup)) {
-			return;
-		}
-		// groupList should never be null, but just in case
-		if (groupList == null){
-			groupList = getGroupDefaults();
-			return;
-		}
-		
-		// Loop over the list and remove the item if found
-		for (int i = 0; i < groupList.size(); i++){
-			if (groupList.get(i).equals(listItem)){
-				groupList.remove(i);
-			}
-		}
-	}
-	
-	public ArrayList<String> getTrackedGroupList() {
-		if (groupList == null){
-			groupList = getGroupDefaults();
-		} else if (groupList.size()==0){
-			groupList = getGroupDefaults();
-		}
-		return groupList;
-	}
-	
 	public FilterParams getDifarFreqResponseFilterParams(){
 		if (difarFreqResponseFilterParams == null ||
 				 !difarFreqResponseFilterParams.filterType.equals(FilterType.FIRARBITRARY)){
@@ -1043,17 +996,6 @@ public class DifarParameters implements Serializable, Cloneable, ManagedParamete
 	@Override
 	public PamParameterSet getParameterSet() {
 		PamParameterSet ps = PamParameterSet.autoGenerate(this, ParameterSetType.DETECTOR);
-		try {
-			Field field = this.getClass().getDeclaredField("groupList");
-			ps.put(new PrivatePamParameterData(this, field) {
-				@Override
-				public Object getData() throws IllegalArgumentException, IllegalAccessException {
-					return groupList;
-				}
-			});
-		} catch (NoSuchFieldException | SecurityException e) {
-			e.printStackTrace();
-		}
 		try {
 			Field field = this.getClass().getDeclaredField("speciesList");
 			ps.put(new PrivatePamParameterData(this, field) {

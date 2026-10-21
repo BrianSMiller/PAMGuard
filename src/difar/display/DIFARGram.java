@@ -90,21 +90,17 @@ public class DIFARGram implements DIFARDisplayUnit {
 
 	public int spectrogramImageChoice;
 
-	private DIFARGroupPanel difarGroupPanel;
-
 	public DIFARGram(DifarControl difarControl) {
 		super();
 		this.difarControl = difarControl;
 		mainPanel = new JPanel(new BorderLayout());
 		axisPanel = new DGAxisPanel();
 		difarUnitControlPanel = difarControl.getDifarUnitControlPanel();
-		difarGroupPanel = new DIFARGroupPanel(difarControl);
 		mainPanel.add(BorderLayout.CENTER, axisPanel);
 
-		// Holds the UnitControlPanel and GroupPanel
+		// Holds the UnitControlPanel
 		PamPanel controlPanel = new PamPanel(new BorderLayout());
-		controlPanel.add(BorderLayout.SOUTH, difarUnitControlPanel.getComponent());
-		controlPanel.add(BorderLayout.CENTER, difarGroupPanel.getComponent());
+		controlPanel.add(BorderLayout.NORTH, difarUnitControlPanel.getComponent());
 		int width = (int) Math.min(controlPanel.getPreferredSize().getWidth(), 120);
 		int height = (int) controlPanel.getPreferredSize().getHeight();
 		controlPanel.setPreferredSize(new Dimension(width,height));
@@ -121,10 +117,6 @@ public class DIFARGram implements DIFARDisplayUnit {
 		return mainPanel;
 	}
 	
-	public DIFARGroupPanel getDifarGroupPanel(){
-		return difarGroupPanel;
-	}
-
 	@Override
 	public int difarNotification(DIFARMessage difarMessage) {
 		switch(difarMessage.message) {
@@ -761,7 +753,6 @@ public class DIFARGram implements DIFARDisplayUnit {
 		currentUnit.setSelectedAngle(angle);
 		currentUnit.setSelectedFrequency(frequency);
 		difarControl.getDifarProcess().getDifarRangeInfo(currentUnit);
-		difarControl.getDifarProcess().estimateTrackedGroup(currentUnit);
 		difarControl.getDifarProcess().getQueuedDifarData().updatePamData(currentUnit, currentUnit.getTimeMilliseconds());
 		difarControl.getDifarUnitControlPanel().enableControls();
 	}

@@ -384,9 +384,6 @@ public class DifarProcess extends PamProcess {
 		if (timing(difarDataUnit)) stageTiming.endDemux();
 
 		calculateDifarGram(difarDataUnit, demuxWorker, startTime);
-
-		estimateTrackedGroup(difarDataUnit);
-		if (timing(difarDataUnit)) stageTiming.endGroup();
 		
 	}
 
@@ -636,38 +633,6 @@ public class DifarProcess extends PamProcess {
 
 	}
 
-	/**
-	 * Match the selected bearing to the nearest mean-bearing to a group, and
-	 * Make sure that the matching group is highlighted in the groups panel. 
-	 * @param difarDataUnit
-	 */
-	public void estimateTrackedGroup(DifarDataUnit difarDataUnit) {
-		if (difarControl.isViewer()){
-			try{
-			difarControl.setCurrentlySelectedGroup(difarDataUnit.getTrackedGroup());
-			} finally {
-				difarControl.setCurrentlySelectedGroup(DifarParameters.DefaultGroup);
-			}
-			return;
-		}
-		if (difarDataUnit.isVessel()) {
-			difarControl.setCurrentlySelectedGroup(DifarParameters.DefaultGroup);
-			difarDataUnit.setTempGroup(DifarParameters.DefaultGroup);
-		}
-		String bestGroup = difarControl.getTrackedGroupProcess().getTrackedGroups().getNearestGroup(difarDataUnit);
-		difarControl.setCurrentlySelectedGroup(bestGroup);
-		
-		String selectedGroup = difarControl.getCurrentlySelectedGroup();
-		// now check that the group exists in the datablock AND hasn't been removed from the display
-		if (bestGroup==null || !difarControl.isTrackedGroupSelectable(bestGroup) || 
-				!bestGroup.equals(selectedGroup)){ 
-			bestGroup = DifarParameters.DefaultGroup;
-		}						
-		
-		difarDataUnit.setTempGroup(bestGroup);
-		difarControl.setCurrentlySelectedGroup(bestGroup);
-	}
-	
 	/**
 	 * creates false lock data for viewer saying loacked all the time
 	 */
@@ -1530,7 +1495,6 @@ public class DifarProcess extends PamProcess {
 		}
 		
 //		getDifarAmplitude(difarDataUnit);
-		difarDataUnit.saveGroup();
 		difarDataUnit.clearOandAngles();
 
 		difarDataUnit.cleanUpData();

@@ -188,8 +188,6 @@ Still open:
   reported.
 - The threaded observers' pause gives up after about 100 short sleeps, then lets data through. Lag
   stayed under a minute on the pilot, but is not strictly bounded.
-- Tracked group selection reads and sets a Swing list off the Swing thread. It did so before, from
-  the DIFARgram's worker. Tracked groups are to be deprecated.
 - A clip the operator saves by hand on the DIFARgram is not locked against an unattended save. Only
   matters if the operator works the queue during an unattended run.
 - **Test.** After a Normal mode run, every child clip in the database must be found in the binary
@@ -259,10 +257,25 @@ What we learned:
 - **Now the save step is slowest, and it slows as the run goes.** In run 6 the median save per
   clip grows from 4 ms to 178 ms over the first 15 minutes of wall time, for every trigger alike,
   then drops to 18 ms and grows again. Run 5 shows the same, less smoothly. Memory is not the
-  cause (16 GB heap, plenty free). Not found by reading `CrossingRecorder` or the data keep
-  times. Something accumulates and is then cleared, perhaps at a binary file or database
-  boundary. **Next:** time the parts of the save step, or a Java Flight Recorder run on the
-  pilot.
+  cause (16 GB heap, plenty free). Demux, DIFARgram and match times stay flat all run.
+- **Cause: tracked groups.** The tracked group process observes the saved clips, so its work is
+  timed as part of the save. A tracked group should summarise one group's bearings from one buoy,
+  but `TrackedGroupDataUnit` never set its buoy start time (the lines were commented out), so no
+  clip found its group and every clip made a new one: 5,807 rows in the run 6 tracked groups
+  table, one per clip. Each new clip then refitted a position over every group unit held (8 hours
+  of data time). Up to 15 minutes into run 6, the median save grows close to linearly with the
+  clips held, about 0.05 ms per clip. The drop at 16 minutes, with the clips held unchanged, is
+  not explained; nor why, late in the run, some threads are slow while others are fast. Perhaps a
+  clip waits for the tracked group thread only when its queue falls far enough behind.
+- **Fix: tracked groups removed** (branch `difar-remove-tracked-groups`, 21 October 2026). They
+  were unused, and slated for removal. The DIFAR binary format stays at version 3: the tracked
+  group slot is written empty and ignored on reading. The `TrackedGroup` column of the clip table
+  stays, empty in new rows. A database with an old tracked groups table gets a warning at startup
+  naming the last version that reads it (`DifarControl.LAST_VERSION_WITH_TRACKED_GROUPS`, 2.02.19).
+  The stage timing loses its `group` column. **Test:** run 7, the multi-detector pilot on this
+  branch. Expect a flat save time, no new tracked groups table, and clips and triangulations as
+  run 6. Old configurations should still load, since the settings' `serialVersionUID` is
+  unchanged and Java skips fields a class no longer has: the run confirms it.
 
 ### DIFAR quality gate (parked)
 
@@ -544,9 +557,9 @@ items below are about making fewer of them necessary.
   the WAV annotation already records.
 - `canMark()` in DIFAR's spectrogram observer is dead code; its caller is commented out.
 - `ClearCrossingTask` is unused. Delete it with `DIFARCrossingInfo`.
-- Tracked groups are old and unused. Drop them, or replace them with a general tracking tool (for
-  example multiple hypothesis tracking). They ignore buoy history: every row of the 2013 pilot run
-  carries the last buoy deployed on its channel, with an empty buoy name and a 1970 buoy time.
+- Tracked groups: removed on 21 October 2026 (branch `difar-remove-tracked-groups`; see "Five
+  triggers on the 2013 pilot"). A tracker could replace them later, for example PAMGuard's existing
+  multiple hypothesis tracking. `ViewerEdits.addConsumer` is kept for such a tracker in the Viewer.
 - The simulated sonobuoy test document lives in the data folder. Consider moving it into the repo.
 
 ## Timing errors and sonobuoy positions
