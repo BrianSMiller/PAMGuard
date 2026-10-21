@@ -238,6 +238,7 @@ and its benchmark log are in `pamguard-tests`, `2013-abwv-pilot/multi-detector`.
 | 4 | five triggers, AAD time domain demux (`e0c811e3`) | 2457 s | 26 times | 1670 s | 1215 s | 340 s | 6667 | 1156 |
 | 5 | AAD fast demux (`52860b34`) | 1242 s | 52 times | 552 s | 111 s | 324 s | 6667 | 1151 |
 | 6 | Ishmael minimum time fixed, 16 GB heap, short DIFAR keep times (`04263e57`) | 1361 s | 48 times | 607 s | 112 s | 374 s | 5807 | 1044 |
+| 7 | tracked groups removed (`f5efd3d2`) | 710 s | 92 times | 263 s | 96 s | 67 s | 5807 | 1044 |
 
 Run 4's wall time is to its last clip; PAMGuard was closed by hand much later.
 
@@ -272,10 +273,20 @@ What we learned:
   group slot is written empty and ignored on reading. The `TrackedGroup` column of the clip table
   stays, empty in new rows. A database with an old tracked groups table gets a warning at startup
   naming the last version that reads it (`DifarControl.LAST_VERSION_WITH_TRACKED_GROUPS`, 2.02.19).
-  The stage timing loses its `group` column. **Test:** run 7, the multi-detector pilot on this
-  branch. Expect a flat save time, no new tracked groups table, and clips and triangulations as
-  run 6. Old configurations should still load, since the settings' `serialVersionUID` is
-  unchanged and Java skips fields a class no longer has: the run confirms it.
+  The stage timing loses its `group` column.
+- **Run 7 (21 October 2026) confirms it.** Twice as fast as run 6 (710 s against 1361 s, 92
+  times real time). DIFAR's save totals 67 s against 374 s; the median save per clip stays under
+  15 ms through the run instead of climbing to 160 ms. Clips and triangulations are identical
+  to run 6 (5,807 and 1,044). The old configuration loaded, and was re-saved at the end without
+  the group list. A smaller rise remains, from about 6 to 14 ms, through the busiest calling
+  hours: probably matching against more clips. Not pursued.
+- The warning first fired on every launch of this test: its starting database has an empty
+  tracked groups table, made by an older PAMGuard. It now fires only when the table has rows,
+  and once per database: at startup, and when the Viewer loads a different database.
+- Run 7 also had one `IndexOutOfBoundsException` at startup, in core
+  (`PamObservable.getPamObserver`, from the Deep Learning segmenter's thread setting sample
+  rates). Probably a race between threads over the observer list. Not in run 6, no DIFAR code
+  in the stack, and the run was unaffected. Watch for it in later runs.
 
 ### DIFAR quality gate (parked)
 

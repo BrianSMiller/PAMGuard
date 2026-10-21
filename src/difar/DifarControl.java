@@ -9,6 +9,9 @@ import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.io.File;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -82,6 +85,7 @@ import warnings.PamWarning;
 import warnings.WarningSystem;
 import generalDatabase.DBControlUnit;
 import generalDatabase.EmptyTableDefinition;
+import generalDatabase.PamConnection;
 
 public class DifarControl extends PamControlledUnit implements PamSettings {
 
@@ -145,6 +149,9 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 	 * They were removed in the version after it.
 	 */
 	public static final String LAST_VERSION_WITH_TRACKED_GROUPS = "2.02.19";
+
+	/** The database last checked for old tracked groups, so each is checked once. */
+	private String trackedGroupsCheckedIn;
 
 	public DifarControl(String unitName) {
 	
@@ -657,6 +664,9 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 			difarProcess.setupProcess();
 			warnIfOldTrackedGroups();
 			break;
+		case PamControllerInterface.CHANGED_OFFLINE_DATASTORE:
+			warnIfOldTrackedGroups();
+			break;
 		case PamControllerInterface.OFFLINE_DATA_LOADED:
 			sonobuoyHistorySource.markStale();
 			sonobuoyManager.updateSonobuoyTableData();
@@ -667,23 +677,45 @@ public class DifarControl extends PamControlledUnit implements PamSettings {
 	}
 
 	/**
-	 * Tracked groups were removed from DIFAR. If the database holds a tracked
-	 * groups table from an older version, say that it is no longer read or
-	 * written, and which version still reads it. The table is left as it is.
+	 * Tracked groups were removed from DIFAR. If the database holds tracked
+	 * groups from an older version, say that they are no longer read or
+	 * written, and which version still reads them. Checked once for each
+	 * database: at startup, and when the viewer loads a different database.
+	 * An empty table, as in a database made by an older version but never
+	 * used for tracked groups, is not mentioned. The table is left as it is.
 	 */
 	private void warnIfOldTrackedGroups() {
 		DBControlUnit dbControl = DBControlUnit.findDatabaseControl();
-		if (dbControl == null || dbControl.getDbProcess() == null) {
+		if (dbControl == null || dbControl.getConnection() == null) {
 			return;
 		}
+		String database = dbControl.getDatabaseName();
+		if (database == null || database.equals(trackedGroupsCheckedIn)) {
+			return;
+		}
+		trackedGroupsCheckedIn = database;
+		PamConnection connection = dbControl.getConnection();
 		EmptyTableDefinition oldTable = new EmptyTableDefinition(getUnitName() + "Tracked Groups");
-		if (!dbControl.getDbProcess().tableExists(oldTable)) {
+		if (dbControl.getDbProcess() == null || !dbControl.getDbProcess().tableExists(oldTable)) {
 			return;
 		}
-		String message = String.format("This database has DIFAR tracked groups (table %s). "
+		String tableName = connection.getSqlTypes().formatTableName(oldTable.getTableName());
+		int rows;
+		try (Statement statement = connection.getConnection().createStatement();
+				ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM " + tableName)) {
+			rows = result.next() ? result.getInt(1) : 0;
+		}
+		catch (SQLException e) {
+			System.out.println("DIFAR: could not count the old tracked groups: " + e.getMessage());
+			return;
+		}
+		if (rows == 0) {
+			return;
+		}
+		String message = String.format("This database has %d DIFAR tracked groups (table %s). "
 				+ "Tracked groups were removed after PAMGuard %s, so they are not read or written. "
 				+ "Use PAMGuard %s or earlier to view them.",
-				oldTable.getTableName(), LAST_VERSION_WITH_TRACKED_GROUPS, LAST_VERSION_WITH_TRACKED_GROUPS);
+				rows, tableName, LAST_VERSION_WITH_TRACKED_GROUPS, LAST_VERSION_WITH_TRACKED_GROUPS);
 		System.out.println("DIFAR: " + message);
 		WarningSystem.getWarningSystem().addWarning(new PamWarning(getUnitName(), message, 1));
 	}
